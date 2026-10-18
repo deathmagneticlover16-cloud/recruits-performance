@@ -1,0 +1,36 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="All Rights Reserved"
+
+[[mods]]
+modId="recruitsperformance"
+version="${file.jarVersion}"
+displayName="Recruits Performance"
+authors="Last Pagans"
+description='''
+Performance runtime layer for Villager Recruits. Alpha 2 fixes simulation tiers,
+adds bounded target memory after line-of-sight loss, and exposes deterministic
+formation geometry and stable slot assignment for RTS integrations.
+'''
+
+[[dependencies.recruitsperformance]]
+modId="forge"
+mandatory=true
+versionRange="[47.4.10,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.recruitsperformance]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.20.1,1.21)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.recruitsperformance]]
+modId="recruits"
+mandatory=true
+versionRange="[1.15.2,)"
+ordering="AFTER"
+side="BOTH"
+

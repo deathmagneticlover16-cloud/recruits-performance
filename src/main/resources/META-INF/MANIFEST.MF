@@ -1,0 +1,8 @@
+Manifest-Version: 1.0
+Specification-Title: Recruits Performance
+Specification-Vendor: Last Pagans
+Specification-Version: 1
+Implementation-Title: recruits-performance
+Implementation-Version: 0.4.0-alpha.2
+Implementation-Vendor: Last Pagans
+
