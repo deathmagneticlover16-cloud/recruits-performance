@@ -10,9 +10,10 @@ public record InstanceData(
         float animationId,
         float red, float green, float blue, float alpha,
         float blockLight, float skyLight,
+        float poseIndex,
         int entityId
 ) {
-    public static InstanceData from(LivingEntity entity, float partialTick, int packedLight, int tint) {
+    public static InstanceData from(LivingEntity entity, float partialTick, int packedLight, int tint, int poseIndex) {
         float x = (float) Mth.lerp(partialTick, entity.xOld, entity.getX());
         float y = (float) Mth.lerp(partialTick, entity.yOld, entity.getY());
         float z = (float) Mth.lerp(partialTick, entity.zOld, entity.getZ());
@@ -32,6 +33,7 @@ public record InstanceData(
                 ((tint >>> 24) & 255) / 255.0F,
                 (packedLight & 0xFFFF) / 240.0F,
                 ((packedLight >>> 16) & 0xFFFF) / 240.0F,
+                poseIndex,
                 entity.getId());
     }
 }

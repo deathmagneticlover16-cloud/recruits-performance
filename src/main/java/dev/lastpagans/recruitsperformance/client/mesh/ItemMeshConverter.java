@@ -15,6 +15,7 @@ public final class ItemMeshConverter {
         MeshData.Builder builder = new MeshData.Builder();
         CaptureVertexConsumer consumer = new CaptureVertexConsumer(builder);
         consumer.bone(leftHand ? HumanoidMeshConverter.LEFT_ARM : HumanoidMeshConverter.RIGHT_ARM);
+        consumer.pivot(leftHand ? 5.0F / 16.0F : -5.0F / 16.0F, 2.0F / 16.0F, 0.0F);
         MultiBufferSource buffers = renderType -> consumer;
         PoseStack pose = new PoseStack();
         pose.translate(leftHand ? 0.34 : -0.34, 0.38, 0.0);

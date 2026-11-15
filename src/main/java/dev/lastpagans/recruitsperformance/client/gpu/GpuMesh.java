@@ -15,7 +15,7 @@ import static org.lwjgl.opengl.GL31C.glDrawElementsInstanced;
 import static org.lwjgl.opengl.GL33C.glVertexAttribDivisor;
 
 public final class GpuMesh implements AutoCloseable {
-    private static final int INSTANCE_FLOATS = 12;
+    private static final int INSTANCE_FLOATS = 13;
     private static final int INSTANCE_STRIDE = INSTANCE_FLOATS * Float.BYTES;
 
     private final int vao;
@@ -55,6 +55,7 @@ public final class GpuMesh implements AutoCloseable {
         attribute(2, 3, vertexStride, 5 * Float.BYTES);
         attribute(3, 1, vertexStride, 8 * Float.BYTES);
         attribute(4, 4, vertexStride, 9 * Float.BYTES);
+        attribute(11, 3, vertexStride, 13 * Float.BYTES);
 
         glBindBuffer(GL_ARRAY_BUFFER, instanceBuffer);
         instanceAttribute(5, 3, 0);
@@ -63,6 +64,7 @@ public final class GpuMesh implements AutoCloseable {
         instanceAttribute(8, 1, 5 * Float.BYTES);
         instanceAttribute(9, 4, 6 * Float.BYTES);
         instanceAttribute(10, 2, 10 * Float.BYTES);
+        instanceAttribute(12, 1, 12 * Float.BYTES);
         glBindVertexArray(0);
     }
 
@@ -75,6 +77,7 @@ public final class GpuMesh implements AutoCloseable {
                 buffer.put(instance.animationPhase()).put(instance.animationId());
                 buffer.put(instance.red()).put(instance.green()).put(instance.blue()).put(instance.alpha());
                 buffer.put(instance.blockLight()).put(instance.skyLight());
+                buffer.put(instance.poseIndex());
             }
             buffer.flip();
             glBindBuffer(GL_ARRAY_BUFFER, instanceBuffer);

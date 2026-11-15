@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class MeshData {
-    public static final int FLOATS_PER_VERTEX = 13;
+    public static final int FLOATS_PER_VERTEX = 16;
 
     private final float[] vertices;
     private final int[] indices;
@@ -25,8 +25,10 @@ public final class MeshData {
 
         public void vertex(float x, float y, float z, float u, float v,
                            float nx, float ny, float nz, int bone,
-                           float red, float green, float blue, float alpha) {
-            vertices.add(new Vertex(x, y, z, u, v, nx, ny, nz, bone, red, green, blue, alpha));
+                           float red, float green, float blue, float alpha,
+                           float pivotX, float pivotY, float pivotZ) {
+            vertices.add(new Vertex(x, y, z, u, v, nx, ny, nz, bone,
+                    red, green, blue, alpha, pivotX, pivotY, pivotZ));
         }
 
         public MeshData buildQuads() {
@@ -49,6 +51,9 @@ public final class MeshData {
                 packed[base + 10] = vertex.green;
                 packed[base + 11] = vertex.blue;
                 packed[base + 12] = vertex.alpha;
+                packed[base + 13] = vertex.pivotX;
+                packed[base + 14] = vertex.pivotY;
+                packed[base + 15] = vertex.pivotZ;
             }
             for (int quad = 0; quad < quads; quad++) {
                 int vertex = quad * 4;
@@ -66,5 +71,6 @@ public final class MeshData {
 
     private record Vertex(float x, float y, float z, float u, float v,
                           float nx, float ny, float nz, int bone,
-                          float red, float green, float blue, float alpha) {}
+                          float red, float green, float blue, float alpha,
+                          float pivotX, float pivotY, float pivotZ) {}
 }

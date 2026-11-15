@@ -41,6 +41,7 @@ public final class HumanoidMeshConverter {
     private static void capture(ModelPart part, int bone, CaptureVertexConsumer consumer) {
         if (!part.visible) return;
         consumer.bone(bone);
+        consumer.pivot(part.x / 16.0F, part.y / 16.0F, part.z / 16.0F);
         part.render(new PoseStack(), consumer, 0x00F000F0, OverlayTexture.NO_OVERLAY);
     }
 

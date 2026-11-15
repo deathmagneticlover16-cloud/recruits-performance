@@ -18,6 +18,9 @@ public final class CaptureVertexConsumer extends DefaultedVertexConsumer {
     private float green = 1.0F;
     private float blue = 1.0F;
     private float alpha = 1.0F;
+    private float pivotX;
+    private float pivotY;
+    private float pivotZ;
 
     public CaptureVertexConsumer(MeshData.Builder builder) {
         this.builder = builder;
@@ -25,6 +28,12 @@ public final class CaptureVertexConsumer extends DefaultedVertexConsumer {
 
     public void bone(int bone) {
         this.bone = bone;
+    }
+
+    public void pivot(float x, float y, float z) {
+        this.pivotX = x;
+        this.pivotY = y;
+        this.pivotZ = z;
     }
 
     @Override
@@ -71,6 +80,7 @@ public final class CaptureVertexConsumer extends DefaultedVertexConsumer {
 
     @Override
     public void endVertex() {
-        builder.vertex(x, y, z, u, v, nx, ny, nz, bone, red, green, blue, alpha);
+        builder.vertex(x, y, z, u, v, nx, ny, nz, bone,
+                red, green, blue, alpha, pivotX, pivotY, pivotZ);
     }
 }

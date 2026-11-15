@@ -24,11 +24,15 @@ public final class CrowdShader implements AutoCloseable {
             layout(location=8) in float iAnimation;
             layout(location=9) in vec4 iColor;
             layout(location=10) in vec2 iLight;
+            layout(location=11) in vec3 aBindPivot;
+            layout(location=12) in float iPoseIndex;
 
             uniform mat4 uProjection;
             uniform mat4 uView;
             uniform vec3 uCamera;
             uniform float uAnimationEnabled;
+            uniform samplerBuffer uPoseBuffer;
+            uniform int uPoseCount;
 
             out vec2 vUv;
             out vec3 vNormal;
@@ -41,15 +45,17 @@ public final class CrowdShader implements AutoCloseable {
             mat3 rotZ(float a) { float c=cos(a), s=sin(a); return mat3(c,s,0, -s,c,0, 0,0,1); }
 
             vec3 pivot(int bone) {
-                if (bone == 2) return vec3(-0.3125, 0.125, 0.0);
-                if (bone == 3) return vec3( 0.3125, 0.125, 0.0);
-                if (bone == 4) return vec3(-0.119, 0.75, 0.0);
-                if (bone == 5) return vec3( 0.119, 0.75, 0.0);
-                return vec3(0.0);
+                return vec3(aBindPivot.x, -aBindPivot.y + 1.5, aBindPivot.z);
             }
 
             mat3 boneRotation(int bone) {
                 if (uAnimationEnabled < 0.5) return mat3(1.0);
+                int pose = int(iPoseIndex + 0.5);
+                if (pose >= 0 && pose < uPoseCount) {
+                    int texel = pose * 12 + bone * 2;
+                    vec3 angles = texelFetch(uPoseBuffer, texel).xyz;
+                    return rotZ(-angles.z) * rotY(angles.y) * rotX(-angles.x);
+                }
                 float walk = sin(iPhase * (iAnimation == 2.0 ? 0.75 : 0.55));
                 if (iAnimation == 1.0 || iAnimation == 2.0) {
                     float amount = iAnimation == 2.0 ? 0.95 : 0.62;
@@ -75,8 +81,14 @@ public final class CrowdShader implements AutoCloseable {
                 vec3 p = vec3(aPosition.x, -aPosition.y + 1.5, aPosition.z);
                 vec3 n = vec3(aNormal.x, -aNormal.y, aNormal.z);
                 vec3 joint = pivot(bone);
+                int pose = int(iPoseIndex + 0.5);
+                if (uAnimationEnabled >= 0.5 && pose >= 0 && pose < uPoseCount) {
+                    vec3 posePivot = texelFetch(uPoseBuffer, pose * 12 + bone * 2 + 1).xyz;
+                    joint = vec3(posePivot.x, -posePivot.y + 1.5, posePivot.z);
+                }
                 mat3 boneMatrix = boneRotation(bone);
-                p = joint + boneMatrix * (p - joint);
+                vec3 bindJoint = pivot(bone);
+                p = joint + boneMatrix * (p - bindJoint);
                 n = boneMatrix * n;
                 if (iAnimation == 8.0) p = rotZ(1.35) * (p - vec3(0.0, 0.9, 0.0)) + vec3(0.0, 0.45, 0.0);
                 mat3 facing = rotY(iYaw);
@@ -118,6 +130,7 @@ public final class CrowdShader implements AutoCloseable {
     private final int view;
     private final int camera;
     private final int animationEnabled;
+    private final int poseCount;
     private final int fogColor;
     private final int fogStart;
     private final int fogEnd;
@@ -142,22 +155,25 @@ public final class CrowdShader implements AutoCloseable {
         view = glGetUniformLocation(program, "uView");
         camera = glGetUniformLocation(program, "uCamera");
         animationEnabled = glGetUniformLocation(program, "uAnimationEnabled");
+        poseCount = glGetUniformLocation(program, "uPoseCount");
         fogColor = glGetUniformLocation(program, "uFogColor");
         fogStart = glGetUniformLocation(program, "uFogStart");
         fogEnd = glGetUniformLocation(program, "uFogEnd");
         use();
         glUniform1i(glGetUniformLocation(program, "uTexture"), 0);
+        glUniform1i(glGetUniformLocation(program, "uPoseBuffer"), 1);
     }
 
     public void use() { glUseProgram(program); }
 
     public void uniforms(Matrix4f projectionMatrix, Matrix4f viewMatrix, double cameraX, double cameraY,
-                         double cameraZ, boolean animate) {
+                         double cameraZ, boolean animate, int poses) {
         use();
         matrix(projection, projectionMatrix);
         matrix(view, viewMatrix);
         glUniform3f(camera, (float) cameraX, (float) cameraY, (float) cameraZ);
         glUniform1f(animationEnabled, animate ? 1.0F : 0.0F);
+        glUniform1i(poseCount, poses);
         float[] color = RenderSystem.getShaderFogColor();
         glUniform3f(fogColor, color[0], color[1], color[2]);
         glUniform1f(fogStart, RenderSystem.getShaderFogStart());
