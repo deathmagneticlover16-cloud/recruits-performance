@@ -2,7 +2,7 @@
 
 Recruits Performance is a Forge 1.20.1 client renderer and server performance runtime for Villager Recruits. Supported recruit visuals bypass `LivingEntityRenderer` after their visual state has been extracted and are drawn as shared GPU mesh instances.
 
-The renderer converts the active Recruits humanoid `ModelPart` hierarchy into one reusable body mesh. Armor is resolved through Forge's `IClientItemExtensions#getHumanoidArmorModel` hook, which is the model-format API used by Epic Knights 10.15 and compatible addons. Standard and custom humanoid armor therefore use the same automatic converter instead of an item whitelist. Main-hand and off-hand baked item geometry is captured once and attached to the animated arm bones. Dynamic equipment changes select a different cached component without rebuilding unrelated soldiers.
+The renderer converts the active Recruits humanoid `ModelPart` hierarchy into one reusable body mesh. Recruits biome, faction-cloth and companion-cloth materials reuse that same geometry as separate instanced batches. Armor is resolved through Forge's `IClientItemExtensions#getHumanoidArmorModel` hook, which is the model-format API used by Epic Knights 10.15 and compatible addons. Standard and custom humanoid armor therefore use the same automatic converter instead of an item whitelist, with dyed base and overlay materials sharing one converted geometry allocation. Main-hand and off-hand baked item geometry is captured once and attached to the animated arm bones. Dynamic equipment changes select a different cached component without rebuilding unrelated soldiers.
 
 Every body and equipment vertex carries a compact bone identifier and the source model part's real bind pivot. Once per visible entity and frame, the renderer evaluates the active `HumanoidModel` pose—including renderer-selected arm poses—and uploads its six bone rotations and pivots to a shared GPU pose buffer. Body, armor and held-item instances reference that pose by index, so they stay aligned without duplicating pose data per component. Procedural walking, running, attack, block, bow, crossbow, hit and death states remain as a fallback when no captured pose is available. Instances sharing a mesh and texture are uploaded together and submitted with `glDrawElementsInstanced`; the CPU does not resubmit humanoid vertices for every soldier.
 
@@ -28,12 +28,13 @@ The distributable JAR is written to `build/libs/recruits-performance-1.20.1-1.0.
 
 Place the built JAR in the client and server `mods` directories alongside Recruits. The GPU renderer is client-side, while the existing scheduling, target-memory and formation APIs remain available on both sides.
 
-Client settings are generated at `config/recruits-performance-client.toml`. The renderer is enabled by default. Set `diagnostics=true` to display virtual instance, batch, draw, cache, VRAM-estimate and CPU submission counters.
+Client settings are generated at `config/recruits-performance-client.toml`. The renderer is enabled by default. Set `diagnostics=true` to display virtual instance, batch, draw, cache, VRAM-estimate, CPU submission and asynchronous GPU timer counters.
 
 ## Rendering behavior
 
 - Vanilla Recruits rendering is cancelled only after the complete body and equipped loadout has converted successfully.
 - If a foreign model cannot produce reusable geometry, that entity keeps its original renderer and the fallback is reported. Equipment is never silently omitted.
+- The supported Recruits humanoid material adapter preserves biome, faction and companion overlays; unknown Recruits body formats and custom-head items deliberately retain vanilla rendering.
 - Body, helmet, chest, leg, boot, main-hand and off-hand geometry are cached separately, so mixed loadouts retain component batching.
 - Captured source-model bone rotations and moving pivots are shared by body, armor and both held-item components through one pose index per entity.
 - Resource reload destroys all GPU objects and lazily rebuilds them from the newly baked models.

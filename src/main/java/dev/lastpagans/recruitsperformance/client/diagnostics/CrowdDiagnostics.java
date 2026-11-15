@@ -15,11 +15,13 @@ public final class CrowdDiagnostics {
     private volatile int fallback;
     private volatile long gpuBytes;
     private volatile long cpuNanos;
+    private volatile long gpuNanos;
 
     public static CrowdDiagnostics get() { return INSTANCE; }
 
     public void publish(int supported, int visible, int batches, int gpuInstances, int drawSubmissions,
-                        int meshes, int equipmentVariants, int fallback, long gpuBytes, long cpuNanos) {
+                        int meshes, int equipmentVariants, int fallback, long gpuBytes, long cpuNanos,
+                        long gpuNanos) {
         this.supported = supported;
         this.visible = visible;
         this.batches = batches;
@@ -30,13 +32,14 @@ public final class CrowdDiagnostics {
         this.fallback = fallback;
         this.gpuBytes = gpuBytes;
         this.cpuNanos = cpuNanos;
+        this.gpuNanos = gpuNanos;
     }
 
     public String summary() {
         return String.format(Locale.ROOT,
-                "virtual=%d visible=%d batches=%d instances=%d draws=%d meshes=%d equipment=%d vram=%.1fMiB submit=%.2fms fallback=%d",
+                "virtual=%d visible=%d batches=%d instances=%d draws=%d meshes=%d equipment=%d vram=%.1fMiB cpu=%.2fms gpu=%.2fms fallback=%d",
                 supported, visible, batches, gpuInstances, drawSubmissions, meshes, equipmentVariants,
-                gpuBytes / 1048576.0, cpuNanos / 1_000_000.0, fallback);
+                gpuBytes / 1048576.0, cpuNanos / 1_000_000.0, gpuNanos / 1_000_000.0, fallback);
     }
 
     public int visible() { return visible; }

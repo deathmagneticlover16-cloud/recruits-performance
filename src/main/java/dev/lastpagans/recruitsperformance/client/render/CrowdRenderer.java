@@ -5,12 +5,14 @@ import dev.lastpagans.recruitsperformance.RecruitsPerformance;
 import dev.lastpagans.recruitsperformance.client.diagnostics.CrowdDiagnostics;
 import dev.lastpagans.recruitsperformance.client.gpu.CrowdShader;
 import dev.lastpagans.recruitsperformance.client.gpu.CrowdPoseBuffer;
+import dev.lastpagans.recruitsperformance.client.gpu.GpuFrameTimer;
 import dev.lastpagans.recruitsperformance.client.mesh.MeshCache;
 import dev.lastpagans.recruitsperformance.client.mesh.MeshHandle;
 import dev.lastpagans.recruitsperformance.client.scene.InstanceData;
 import dev.lastpagans.recruitsperformance.client.scene.HumanoidPoseEvaluator;
 import dev.lastpagans.recruitsperformance.client.scene.MeshKey;
 import dev.lastpagans.recruitsperformance.client.scene.PoseData;
+import dev.lastpagans.recruitsperformance.client.scene.RecruitVisualLayers;
 import dev.lastpagans.recruitsperformance.config.CrowdRendererConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.HumanoidModel;
@@ -45,6 +47,7 @@ public final class CrowdRenderer {
     private MeshCache cache;
     private CrowdShader shader;
     private CrowdPoseBuffer poseBuffer;
+    private GpuFrameTimer gpuTimer;
     private boolean failed;
     private int fallbacks;
 
@@ -75,6 +78,11 @@ public final class CrowdRenderer {
                 return poses.size() - 1;
             });
             add(body, InstanceData.from(entity, partialTick, packedLight, body.tint(), poseIndex));
+            for (ResourceLocation layerTexture : RecruitVisualLayers.textures(entity, texture)) {
+                MeshHandle layer = cache.bodyLayer(model, layerTexture);
+                if (layer == null) throw new IllegalStateException("Recruits visual layer produced no geometry: " + layerTexture);
+                add(layer, InstanceData.from(entity, partialTick, packedLight, layer.tint(), poseIndex));
+            }
             for (MeshHandle equipment : cache.equipment(entity)) {
                 add(equipment, InstanceData.from(entity, partialTick, packedLight, equipment.tint(), poseIndex));
             }
@@ -115,6 +123,7 @@ public final class CrowdRenderer {
                     CrowdRendererConfig.gpuAnimation.get(), poses.size());
 
             glActiveTexture(GL_TEXTURE0);
+            gpuTimer.begin();
             for (Batch batch : batches.values()) {
                 if (batch.instances.isEmpty()) continue;
                 batch.handle.mesh().upload(batch.instances);
@@ -129,6 +138,7 @@ public final class CrowdRenderer {
             failed = true;
             RecruitsPerformance.LOGGER.error("Disabling Recruits crowd renderer after GPU failure", renderFailure);
         } finally {
+            if (gpuTimer != null) gpuTimer.end();
             glActiveTexture(GL_TEXTURE0);
             glBindVertexArray(0);
             glUseProgram(0);
@@ -137,7 +147,8 @@ public final class CrowdRenderer {
             CrowdDiagnostics.get().publish(submittedEntities.size(), submittedEntities.size(), batches.size(),
                     instances, drawCalls, cache == null ? 0 : cache.size(),
                     cache == null ? 0 : cache.equipmentVariants(), fallbacks,
-                    (cache == null ? 0 : cache.bytes()) + (poseBuffer == null ? 0 : poseBuffer.bytes()), elapsed);
+                    (cache == null ? 0 : cache.bytes()) + (poseBuffer == null ? 0 : poseBuffer.bytes()),
+                    elapsed, gpuTimer == null ? 0 : gpuTimer.lastNanos());
             batches.clear();
             submittedEntities.clear();
             poses.clear();
@@ -155,28 +166,33 @@ public final class CrowdRenderer {
             if (cache != null) cache.close();
             if (shader != null) shader.close();
             if (poseBuffer != null) poseBuffer.close();
+            if (gpuTimer != null) gpuTimer.close();
             cache = null;
             shader = null;
             poseBuffer = null;
+            gpuTimer = null;
             failed = false;
         };
         if (RenderSystem.isOnRenderThread()) close.run(); else RenderSystem.recordRenderCall(close::run);
     }
 
     private boolean initialize() {
-        if (shader != null && cache != null && poseBuffer != null) return true;
+        if (shader != null && cache != null && poseBuffer != null && gpuTimer != null) return true;
         try {
             shader = new CrowdShader();
             cache = new MeshCache();
             poseBuffer = new CrowdPoseBuffer();
+            gpuTimer = new GpuFrameTimer();
             return true;
         } catch (Throwable initializationFailure) {
             if (poseBuffer != null) poseBuffer.close();
             if (cache != null) cache.close();
             if (shader != null) shader.close();
+            if (gpuTimer != null) gpuTimer.close();
             poseBuffer = null;
             cache = null;
             shader = null;
+            gpuTimer = null;
             failed = true;
             RecruitsPerformance.LOGGER.error("Crowd renderer initialization failed", initializationFailure);
             return false;

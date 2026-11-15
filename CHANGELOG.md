@@ -6,8 +6,10 @@
 - Added shared GPU geometry, per-instance buffers, material batching and resource-reload disposal.
 - Added GPU skeletal animation states for movement, combat, ranged weapons, damage and death.
 - Added indexed GPU pose palettes that preserve active humanoid rotations, moving pivots and renderer-selected arm poses across body and equipment batches.
+- Added instanced Recruits biome, faction-cloth and companion-cloth layers while sharing one body geometry allocation across material variants.
 - Added depth, fog, lighting and camera integration.
 - Added client configuration, diagnostics, cache accounting and a 300–2,000-soldier batching harness.
+- Added non-blocking GPU timer queries to the diagnostics overlay alongside CPU crowd-pass timing.
 - Added a checksummed Gradle wrapper and reproducible build instructions.
 
 # 0.4.0-alpha.2

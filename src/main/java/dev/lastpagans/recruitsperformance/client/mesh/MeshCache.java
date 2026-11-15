@@ -1,6 +1,5 @@
 package dev.lastpagans.recruitsperformance.client.mesh;
 
-import dev.lastpagans.recruitsperformance.RecruitsPerformance;
 import dev.lastpagans.recruitsperformance.client.gpu.GpuMesh;
 import dev.lastpagans.recruitsperformance.client.scene.MeshKey;
 import dev.lastpagans.recruitsperformance.config.CrowdRendererConfig;
@@ -30,18 +29,27 @@ import java.util.Set;
 public final class MeshCache implements AutoCloseable {
     private static final ResourceLocation ITEM_ATLAS = TextureAtlas.LOCATION_BLOCKS;
 
-    private final LinkedHashMap<MeshKey, GpuMesh> meshes = new LinkedHashMap<>(64, 0.75F, true);
+    private final LinkedHashMap<String, GpuMesh> meshes = new LinkedHashMap<>(64, 0.75F, true);
+    private final Set<String> equipmentMeshes = new java.util.HashSet<>();
     private HumanoidModel<LivingEntity> innerArmor;
     private HumanoidModel<LivingEntity> outerArmor;
-    private long geometryBytes;
-    private int equipmentVariants;
 
     public MeshHandle body(HumanoidModel<?> model, ResourceLocation texture) {
-        MeshKey key = new MeshKey(model.getClass().getName(), texture, -1, MeshKey.Kind.BODY);
-        return handle(key, texture, 0xFFFFFFFF, false, () -> HumanoidMeshConverter.convert(model));
+        String geometry = model.getClass().getName();
+        MeshKey key = new MeshKey(geometry, texture, -1, MeshKey.Kind.BODY);
+        return handle(key, geometry, texture, 0xFFFFFFFF, false, () -> HumanoidMeshConverter.convert(model));
+    }
+
+    public MeshHandle bodyLayer(HumanoidModel<?> model, ResourceLocation texture) {
+        return body(model, texture);
     }
 
     public List<MeshHandle> equipment(LivingEntity entity) {
+        ItemStack head = entity.getItemBySlot(EquipmentSlot.HEAD);
+        if (!head.isEmpty() && !(head.getItem() instanceof ArmorItem)) {
+            throw new IllegalStateException("Non-armor head item requires the vanilla custom-head layer: " +
+                    BuiltInRegistries.ITEM.getKey(head.getItem()));
+        }
         List<MeshHandle> result = new ArrayList<>(6);
         armor(entity, EquipmentSlot.HEAD, result);
         armor(entity, EquipmentSlot.CHEST, result);
@@ -53,21 +61,24 @@ public final class MeshCache implements AutoCloseable {
     }
 
     public int size() { return meshes.size(); }
-    public int equipmentVariants() { return equipmentVariants; }
+    public int equipmentVariants() { return equipmentMeshes.size(); }
     public long bytes() {
-        long instanceBytes = meshes.values().stream().mapToLong(GpuMesh::bytes).sum();
-        return Math.max(geometryBytes, instanceBytes);
+        return meshes.values().stream().mapToLong(GpuMesh::bytes).sum();
     }
 
     public void trim(Set<MeshKey> active) {
         long budget = (long) CrowdRendererConfig.meshCacheMegabytes.get() * 1024L * 1024L;
-        if (geometryBytes <= budget) return;
+        long currentBytes = bytes();
+        if (currentBytes <= budget) return;
+        Set<String> activeGeometry = new java.util.HashSet<>();
+        active.forEach(key -> activeGeometry.add(key.geometry()));
         var iterator = meshes.entrySet().iterator();
-        while (geometryBytes > budget && iterator.hasNext()) {
-            Map.Entry<MeshKey, GpuMesh> entry = iterator.next();
-            if (active.contains(entry.getKey())) continue;
-            geometryBytes -= entry.getValue().bytes();
+        while (currentBytes > budget && iterator.hasNext()) {
+            Map.Entry<String, GpuMesh> entry = iterator.next();
+            if (activeGeometry.contains(entry.getKey())) continue;
+            currentBytes -= entry.getValue().bytes();
             entry.getValue().close();
+            equipmentMeshes.remove(entry.getKey());
             iterator.remove();
         }
     }
@@ -76,8 +87,7 @@ public final class MeshCache implements AutoCloseable {
     public void close() {
         meshes.values().forEach(GpuMesh::close);
         meshes.clear();
-        geometryBytes = 0L;
-        equipmentVariants = 0;
+        equipmentMeshes.clear();
         innerArmor = null;
         outerArmor = null;
     }
@@ -102,9 +112,18 @@ public final class MeshCache implements AutoCloseable {
         int tint = stack.getItem() instanceof DyeableLeatherItem dyeable
                 ? 0xFF000000 | dyeable.getColor(stack) : 0xFFFFFFFF;
         HumanoidModel<?> captured = model;
-        MeshHandle handle = handle(key, texture, tint, true, () -> captureArmor(captured, slot));
+        MeshHandle handle = handle(key, key.geometry(), texture, tint, true, () -> captureArmor(captured, slot));
         if (handle == null) throw new IllegalStateException("Armor model produced no geometry: " + itemId);
         result.add(handle);
+        if (stack.getItem() instanceof DyeableLeatherItem) {
+            String overlayTexture = ForgeHooksClient.getArmorTexture(entity, stack, baseTexture, slot, "overlay");
+            ResourceLocation overlay = new ResourceLocation(overlayTexture);
+            MeshKey overlayKey = new MeshKey(key.geometry(), overlay, -1, MeshKey.Kind.ARMOR);
+            MeshHandle overlayHandle = handle(overlayKey, key.geometry(), overlay, 0xFFFFFFFF, true,
+                    () -> captureArmor(captured, slot));
+            if (overlayHandle == null) throw new IllegalStateException("Armor overlay produced no geometry: " + itemId);
+            result.add(overlayHandle);
+        }
     }
 
     private void item(LivingEntity entity, ItemStack stack, boolean left, List<MeshHandle> result) {
@@ -115,24 +134,24 @@ public final class MeshCache implements AutoCloseable {
         boolean using = entity.isUsingItem() && entity.getUseItem() == stack;
         boolean charged = stack.getItem() instanceof CrossbowItem && CrossbowItem.isCharged(stack);
         int visualTag = stack.hasTag() ? stack.getTag().hashCode() : 0;
-        MeshKey key = new MeshKey(itemId + ":" + using + ":" + charged + ":" + visualTag, texture,
+        String geometry = itemId + ":" + (left ? "left" : "right") + ":" + using + ":" + charged + ":" + visualTag;
+        MeshKey key = new MeshKey(geometry, texture,
                 left ? HumanoidMeshConverter.LEFT_ARM : HumanoidMeshConverter.RIGHT_ARM, kind);
-        MeshHandle handle = handle(key, texture, 0xFFFFFFFF, true,
+        MeshHandle handle = handle(key, geometry, texture, 0xFFFFFFFF, true,
                 () -> ItemMeshConverter.convert(entity, stack, left));
         if (handle == null) throw new IllegalStateException("Item model produced no geometry: " + itemId);
         result.add(handle);
     }
 
-    private MeshHandle handle(MeshKey key, ResourceLocation texture, int tint, boolean equipment,
+    private MeshHandle handle(MeshKey key, String geometry, ResourceLocation texture, int tint, boolean equipment,
                               MeshFactory factory) {
-        GpuMesh mesh = meshes.get(key);
+        GpuMesh mesh = meshes.get(geometry);
         if (mesh == null) {
             MeshData data = factory.create();
             if (data.isEmpty()) return null;
             mesh = new GpuMesh(data);
-            meshes.put(key, mesh);
-            geometryBytes += data.bytes();
-            if (equipment) equipmentVariants++;
+            meshes.put(geometry, mesh);
+            if (equipment) equipmentMeshes.add(geometry);
         }
         return new MeshHandle(key, mesh, texture, tint, equipment);
     }
