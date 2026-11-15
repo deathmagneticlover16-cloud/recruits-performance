@@ -14,10 +14,6 @@ public final class PerformanceConfig {
     public static ForgeConfigSpec.BooleanValue friendlyCollisionSuppression;
     public static ForgeConfigSpec.BooleanValue navigationDeduplication;
     public static ForgeConfigSpec.BooleanValue customTacticalNavigation;
-    public static ForgeConfigSpec.BooleanValue clientRenderLod;
-    public static ForgeConfigSpec.BooleanValue simplifiedArmor;
-    public static ForgeConfigSpec.BooleanValue simplifiedWeapons;
-    public static ForgeConfigSpec.BooleanValue renderBatching;
     public static ForgeConfigSpec.BooleanValue networkLod;
     public static ForgeConfigSpec.BooleanValue targetMemory;
     public static ForgeConfigSpec.BooleanValue targetMemoryPursuit;
@@ -68,10 +64,6 @@ public final class PerformanceConfig {
         friendlyCollisionSuppression = future(b, "friendlyCollisionSuppression");
         navigationDeduplication = future(b, "navigationDeduplication");
         customTacticalNavigation = future(b, "customTacticalNavigation");
-        clientRenderLod = future(b, "clientRenderLod");
-        simplifiedArmor = future(b, "simplifiedArmor");
-        simplifiedWeapons = future(b, "simplifiedWeapons");
-        renderBatching = future(b, "renderBatching");
         networkLod = future(b, "networkLod");
         targetMemory = b.comment("Keep a valid combat target briefly after line of sight is lost.").define("targetMemory", true);
         targetMemoryPursuit = b.comment("Allow eligible recruits to investigate the target's last-known position.").define("targetMemoryPursuit", true);

@@ -1,50 +1,48 @@
-# Recruits Performance 0.4.0 Alpha 2
+# Recruits Performance
 
-Target: Minecraft 1.20.1, Forge 47.4.10, Villager Recruits 1.15.2.
+Recruits Performance is a Forge 1.20.1 client renderer and server performance runtime for Villager Recruits. Supported recruit visuals bypass `LivingEntityRenderer` after their visual state has been extracted and are drawn as shared GPU mesh instances.
 
-Alpha 2 begins active behaviour control while keeping every invasive feature independently configurable.
+The renderer converts the active Recruits humanoid `ModelPart` hierarchy into one reusable body mesh. Armor is resolved through Forge's `IClientItemExtensions#getHumanoidArmorModel` hook, which is the model-format API used by Epic Knights 10.15 and compatible addons. Standard and custom humanoid armor therefore use the same automatic converter instead of an item whitelist. Main-hand and off-hand baked item geometry is captured once and attached to the animated arm bones. Dynamic equipment changes select a different cached component without rebuilding unrelated soldiers.
 
-Implemented:
+Every body and equipment vertex carries a compact bone identifier. One shared vertex shader evaluates walking, running, attack, block, bow, crossbow, hit and death poses independently from per-instance phase data. Instances sharing a mesh and texture are uploaded together and submitted with `glDrawElementsInstanced`; the CPU does not resubmit humanoid vertices for every soldier.
 
-- event-maintained recruit runtime registry;
-- transient runtime brain and dirty state;
-- global priority scheduler with per-work-type budgets;
-- corrected HOT/WARM/COLD/DORMANT classification;
-- nearby idle armies no longer remain permanently HOT merely because a player is present;
-- urgent wake leases for damage, commands, target changes, fire, and explosions;
-- bounded target memory after line-of-sight loss;
-- last-known-position pursuit for eligible native orders;
-- target expiry, range limits, reacquisition, and telemetry;
-- deterministic formation geometry API;
-- genuine filled circles, hollow circles, rectangles, squares, hollow variants, lines, columns, and wedges;
-- stable formation slot assignment helpers;
-- RTS formation slot/position/velocity integration API;
-- movement-authority state and RTS heartbeat watchdog;
-- `/recruitsperf` diagnostics and feature flags.
+## Requirements
 
-Target memory deliberately does not pull HOLD, FOLLOW, MOVE, REST, UPKEEP, or RTS-controlled recruits away from their orders. The RTS mod remains authoritative for tactical formation geometry and movement; this mod supplies reusable geometry and runtime primitives.
+- Minecraft 1.20.1
+- Forge 47.4.10 or newer in the 47.x line
+- Java 17
+- Villager Recruits 1.15.2 or newer compatible 1.20.1 build
+- OpenGL 3.3 or newer; OpenGL 4.6 hardware is recommended
 
-Still reserved for later measured phases:
+Epic Knights and Recruits RTS are optional integrations. Their conventional humanoid armor and item models are discovered through Forge and Minecraft model APIs without a compile-time dependency.
 
-- broad native goal suppression;
-- formation slot steering execution;
-- shared battlefield perception replacement;
-- route-corridor navigation and recovery paths;
-- collision suppression;
-- rendering, animation, and network LOD.
+## Build
 
-## Commands
+```text
+./gradlew clean build
+```
 
-- `/recruitsperf stats`
-- `/recruitsperf resetstats`
-- `/recruitsperf dump`
-- `/recruitsperf scheduler`
-- `/recruitsperf ai`
-- `/recruitsperf targetmemory`
-- `/recruitsperf navigation`
-- `/recruitsperf rendering`
-- `/recruitsperf features`
+The distributable JAR is written to `build/libs/recruits-performance-1.20.1-1.0.0-alpha.1.jar`. The checked-in wrapper verifies Gradle 8.5 with its official SHA-256 checksum.
 
-Commands require permission level 2. Configuration is generated at `config/recruitsperformance-common.toml`.
+## Install
 
-RTS integration examples are in `FORMATION_API.md`.
+Place the built JAR in the client and server `mods` directories alongside Recruits. The GPU renderer is client-side, while the existing scheduling, target-memory and formation APIs remain available on both sides.
+
+Client settings are generated at `config/recruits-performance-client.toml`. The renderer is enabled by default. Set `diagnostics=true` to display virtual instance, batch, draw, cache, VRAM-estimate and CPU submission counters.
+
+## Rendering behavior
+
+- Vanilla Recruits rendering is cancelled only after the complete body and equipped loadout has converted successfully.
+- If a foreign model cannot produce reusable geometry, that entity keeps its original renderer and the fallback is reported. Equipment is never silently omitted.
+- Body, helmet, chest, leg, boot, main-hand and off-hand geometry are cached separately, so mixed loadouts retain component batching.
+- Resource reload destroys all GPU objects and lazily rebuilds them from the newly baked models.
+- Minecraft's depth buffer, camera matrices, fog, alpha cutout and sampled block/sky light remain active for the crowd pass.
+- Recruits RTS movement hints and ordinary entity combat/use state select GPU animation states without changing server-authoritative gameplay.
+
+The previous AI scheduler, simulation tiers, bounded target memory and deterministic formation API remain in the project. Their server commands continue under `/recruitsperf`.
+
+See [BENCHMARKING.md](BENCHMARKING.md) for the reproducible 300–2,000-soldier protocol and [TESTING.md](TESTING.md) for verification steps.
+
+## Known limits
+
+Animated geometry supplied only through a procedural renderer that never emits Forge `HumanoidModel`, `ModelPart`, or baked-item vertices cannot be converted generically. Those entities keep their original renderer and increment the fallback counter. Shader-pack correctness and RX 570 performance require an actual game/GPU run; the source environment cannot emulate those results.

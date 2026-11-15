@@ -116,15 +116,8 @@ public final class RecruitsPerfCommands {
     }
 
     private static int rendering(CommandContext<CommandSourceStack> context) {
-        PerformanceMetrics m = ServerRuntime.get(context.getSource().getServer()).metrics();
-        send(context, "rendering visible=" + m.get(Metric.RENDER_VISIBLE)
-                + " rendered=" + m.get(Metric.RENDER_RENDERED)
-                + " lod0=" + m.get(Metric.RENDER_LOD0)
-                + " lod1=" + m.get(Metric.RENDER_LOD1)
-                + " lod2=" + m.get(Metric.RENDER_LOD2)
-                + " lod3=" + m.get(Metric.RENDER_LOD3)
-                + " culled=" + m.get(Metric.RENDER_CULLED)
-                + " (client render instrumentation begins in Phase 12)");
+        send(context, "Crowd rendering is measured on each client; enable crowdRenderer.diagnostics "
+                + "in recruits-performance-client.toml to view live GPU instance and batch counters.");
         return 1;
     }
 
@@ -136,8 +129,6 @@ public final class RecruitsPerfCommands {
                 + " perception=" + PerformanceConfig.sharedPerception.get()
                 + " steering=" + PerformanceConfig.localSteering.get()
                 + " navDedup=" + PerformanceConfig.navigationDeduplication.get()
-                + " renderLOD=" + PerformanceConfig.clientRenderLod.get()
-                + " batching=" + PerformanceConfig.renderBatching.get()
                 + " networkLOD=" + PerformanceConfig.networkLod.get());
         send(context, "features targetMemory=" + PerformanceConfig.targetMemory.get()
                 + " memoryPursuit=" + PerformanceConfig.targetMemoryPursuit.get()

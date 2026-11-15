@@ -11,7 +11,7 @@ buildscript {
 apply plugin: 'net.minecraftforge.gradle'
 apply plugin: 'java'
 
-version = '0.4.0-alpha.2'
+version = '1.0.0-alpha.1'
 group = 'dev.lastpagans.recruitsperformance'
 base { archivesName = 'recruits-performance-1.20.1' }
 
@@ -56,4 +56,24 @@ jar {
 }
 
 jar.finalizedBy('reobfJar')
+
+tasks.register('contractTests') {
+    dependsOn testClasses
+    doLast {
+        [
+            'dev.lastpagans.recruitsperformance.FormationLayoutTest',
+            'dev.lastpagans.recruitsperformance.SchedulerBudgetTest',
+            'dev.lastpagans.recruitsperformance.runtime.SimulationTierPolicyTest',
+            'dev.lastpagans.recruitsperformance.client.MeshDataTest',
+            'dev.lastpagans.recruitsperformance.client.CrowdBatchBenchmark'
+        ].each { className ->
+            javaexec {
+                classpath = sourceSets.test.runtimeClasspath
+                mainClass = className
+            }
+        }
+    }
+}
+
+build.dependsOn tasks.named('contractTests')
 

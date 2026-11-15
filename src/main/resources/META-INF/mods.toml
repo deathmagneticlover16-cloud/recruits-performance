@@ -8,9 +8,9 @@ version="${file.jarVersion}"
 displayName="Recruits Performance"
 authors="Last Pagans"
 description='''
-Performance runtime layer for Villager Recruits. Alpha 2 fixes simulation tiers,
-adds bounded target memory after line-of-sight loss, and exposes deterministic
-formation geometry and stable slot assignment for RTS integrations.
+GPU-instanced crowd renderer and performance runtime for Villager Recruits.
+Supported soldiers are converted into shared body, armor and equipment meshes,
+animated on the GPU, and submitted in material-aware instance batches.
 '''
 
 [[dependencies.recruitsperformance]]
