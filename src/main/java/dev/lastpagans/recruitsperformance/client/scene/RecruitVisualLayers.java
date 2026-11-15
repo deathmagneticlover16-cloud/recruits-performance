@@ -48,6 +48,10 @@ public final class RecruitVisualLayers {
         return result;
     }
 
+    public static float modelScale(ResourceLocation baseTexture) {
+        return baseTexture.getPath().contains("/villager/") ? 0.9375F : 1.0F;
+    }
+
     private static ResourceLocation texture(String path) {
         return new ResourceLocation(NAMESPACE, path);
     }

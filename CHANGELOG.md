@@ -8,6 +8,8 @@
 - Added GPU skeletal animation states for movement, combat, ranged weapons, damage and death.
 - Added indexed GPU pose palettes that preserve active humanoid rotations, moving pivots and renderer-selected arm poses across body and equipment batches.
 - Added instanced Recruits biome, faction-cloth and companion-cloth layers while sharing one body geometry allocation across material variants.
+- Preserved the Recruits villager renderer's 0.9375 model scale as compact per-instance state.
+- Matched Minecraft's living-model X/Y inversion and 180-degree facing transform, including the equivalent captured-bone rotation signs.
 - Added depth, fog, lighting and camera integration.
 - Added client configuration, diagnostics, cache accounting and a 300–2,000-soldier batching harness.
 - Added non-blocking GPU timer queries to the diagnostics overlay alongside CPU crowd-pass timing.

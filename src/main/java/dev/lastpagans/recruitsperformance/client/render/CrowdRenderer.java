@@ -68,8 +68,8 @@ public final class CrowdRenderer {
         if (!initialize()) return false;
 
         try {
-            if (CrowdRendererConfig.optimizedShadows.get()) ShadowSuppressor.suppress(renderer);
             ResourceLocation texture = renderer.getTextureLocation(entity);
+            float modelScale = RecruitVisualLayers.modelScale(texture);
             MeshHandle body = cache.body(model, texture);
             if (body == null) return false;
             HumanoidModel<LivingEntity> typedModel = (HumanoidModel<LivingEntity>) model;
@@ -77,15 +77,17 @@ public final class CrowdRenderer {
                 poses.add(HumanoidPoseEvaluator.evaluate(typedModel, entity, partialTick));
                 return poses.size() - 1;
             });
-            add(body, InstanceData.from(entity, partialTick, packedLight, body.tint(), poseIndex));
+            add(body, InstanceData.from(entity, partialTick, packedLight, body.tint(), poseIndex, modelScale));
             for (ResourceLocation layerTexture : RecruitVisualLayers.textures(entity, texture)) {
                 MeshHandle layer = cache.bodyLayer(model, layerTexture);
                 if (layer == null) throw new IllegalStateException("Recruits visual layer produced no geometry: " + layerTexture);
-                add(layer, InstanceData.from(entity, partialTick, packedLight, layer.tint(), poseIndex));
+                add(layer, InstanceData.from(entity, partialTick, packedLight, layer.tint(), poseIndex, modelScale));
             }
             for (MeshHandle equipment : cache.equipment(entity, model)) {
-                add(equipment, InstanceData.from(entity, partialTick, packedLight, equipment.tint(), poseIndex));
+                add(equipment, InstanceData.from(entity, partialTick, packedLight,
+                        equipment.tint(), poseIndex, modelScale));
             }
+            if (CrowdRendererConfig.optimizedShadows.get()) ShadowSuppressor.suppress(renderer);
             submittedEntities.add(entity.getId());
             return true;
         } catch (Throwable conversionFailure) {

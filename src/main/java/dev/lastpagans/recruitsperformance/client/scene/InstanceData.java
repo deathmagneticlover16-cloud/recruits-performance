@@ -11,13 +11,15 @@ public record InstanceData(
         float red, float green, float blue, float alpha,
         float blockLight, float skyLight,
         float poseIndex,
+        float scale,
         int entityId
 ) {
-    public static InstanceData from(LivingEntity entity, float partialTick, int packedLight, int tint, int poseIndex) {
+    public static InstanceData from(LivingEntity entity, float partialTick, int packedLight, int tint,
+                                    int poseIndex, float scale) {
         float x = (float) Mth.lerp(partialTick, entity.xOld, entity.getX());
         float y = (float) Mth.lerp(partialTick, entity.yOld, entity.getY());
         float z = (float) Mth.lerp(partialTick, entity.zOld, entity.getZ());
-        float yaw = -Mth.lerp(partialTick, entity.yBodyRotO, entity.yBodyRot) * Mth.DEG_TO_RAD;
+        float yaw = Mth.PI - Mth.lerp(partialTick, entity.yBodyRotO, entity.yBodyRot) * Mth.DEG_TO_RAD;
         CrowdAnimation animation = CrowdAnimation.select(entity);
         float phase = entity.tickCount + partialTick + (entity.getId() * 0.6180339F % 1.0F) * 20.0F;
         float red = ((tint >> 16) & 255) / 255.0F;
@@ -34,6 +36,7 @@ public record InstanceData(
                 (packedLight & 0xFFFF) / 240.0F,
                 ((packedLight >>> 16) & 0xFFFF) / 240.0F,
                 poseIndex,
+                scale,
                 entity.getId());
     }
 }
