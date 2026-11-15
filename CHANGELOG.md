@@ -3,6 +3,7 @@
 - Replaced supported Recruits living-entity rendering with a dedicated instanced crowd pass.
 - Added automatic humanoid body and Forge armor-model conversion, including Epic Knights model formats.
 - Added reusable baked-item conversion for weapons and shields.
+- Matched vanilla's third-person hand transform while retaining the active model's real arm pivot for converted weapons and shields.
 - Added shared GPU geometry, per-instance buffers, material batching and resource-reload disposal.
 - Added GPU skeletal animation states for movement, combat, ranged weapons, damage and death.
 - Added indexed GPU pose palettes that preserve active humanoid rotations, moving pivots and renderer-selected arm poses across body and equipment batches.
@@ -10,6 +11,7 @@
 - Added depth, fog, lighting and camera integration.
 - Added client configuration, diagnostics, cache accounting and a 300–2,000-soldier batching harness.
 - Added non-blocking GPU timer queries to the diagnostics overlay alongside CPU crowd-pass timing.
+- Reused native instance staging buffers and orphaned shared instance VBO storage between material draws to avoid allocation churn and driver synchronization stalls.
 - Added a checksummed Gradle wrapper and reproducible build instructions.
 
 # 0.4.0-alpha.2

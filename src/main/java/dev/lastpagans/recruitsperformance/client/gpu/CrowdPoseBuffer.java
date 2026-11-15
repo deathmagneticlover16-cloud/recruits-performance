@@ -18,6 +18,7 @@ public final class CrowdPoseBuffer implements AutoCloseable {
     private final int buffer = glGenBuffers();
     private final int texture = glGenTextures();
     private int capacityFloats;
+    private FloatBuffer staging;
 
     public CrowdPoseBuffer() {
         capacityFloats = 3;
@@ -30,22 +31,22 @@ public final class CrowdPoseBuffer implements AutoCloseable {
 
     public void upload(List<PoseData> poses) {
         int required = Math.max(3, poses.size() * PoseData.BONE_COUNT * PoseData.FLOATS_PER_BONE);
-        FloatBuffer data = MemoryUtil.memAllocFloat(required);
-        try {
-            for (PoseData pose : poses) data.put(pose.values());
-            while (data.position() < required) data.put(0.0F);
-            data.flip();
-            glBindBuffer(GL_TEXTURE_BUFFER, buffer);
-            if (required > capacityFloats) {
-                capacityFloats = Math.max(required, Integer.highestOneBit(required - 1) << 1);
-                glBufferData(GL_TEXTURE_BUFFER, (long) capacityFloats * Float.BYTES, GL_STREAM_DRAW);
-            }
-            glBufferSubData(GL_TEXTURE_BUFFER, 0, data);
-            glBindTexture(GL_TEXTURE_BUFFER, texture);
-            glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, buffer);
-        } finally {
-            MemoryUtil.memFree(data);
+        if (staging == null || staging.capacity() < required) {
+            if (staging != null) MemoryUtil.memFree(staging);
+            staging = MemoryUtil.memAllocFloat(Math.max(required, Integer.highestOneBit(required - 1) << 1));
         }
+        staging.clear();
+        for (PoseData pose : poses) staging.put(pose.values());
+        while (staging.position() < required) staging.put(0.0F);
+        staging.flip();
+        glBindBuffer(GL_TEXTURE_BUFFER, buffer);
+        if (required > capacityFloats) {
+            capacityFloats = Math.max(required, Integer.highestOneBit(required - 1) << 1);
+        }
+        glBufferData(GL_TEXTURE_BUFFER, (long) capacityFloats * Float.BYTES, GL_STREAM_DRAW);
+        glBufferSubData(GL_TEXTURE_BUFFER, 0, staging);
+        glBindTexture(GL_TEXTURE_BUFFER, texture);
+        glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, buffer);
     }
 
     public void bind() { glBindTexture(GL_TEXTURE_BUFFER, texture); }
@@ -54,6 +55,7 @@ public final class CrowdPoseBuffer implements AutoCloseable {
 
     @Override
     public void close() {
+        if (staging != null) MemoryUtil.memFree(staging);
         glDeleteTextures(texture);
         glDeleteBuffers(buffer);
     }

@@ -25,6 +25,7 @@ public final class GpuMesh implements AutoCloseable {
     private final int indexCount;
     private final long geometryBytes;
     private int instanceCapacity;
+    private FloatBuffer staging;
 
     public GpuMesh(MeshData data) {
         this.indexCount = data.indices().length;
@@ -70,25 +71,29 @@ public final class GpuMesh implements AutoCloseable {
 
     public void upload(List<InstanceData> instances) {
         if (instances.isEmpty()) return;
-        FloatBuffer buffer = MemoryUtil.memAllocFloat(instances.size() * INSTANCE_FLOATS);
-        try {
-            for (InstanceData instance : instances) {
-                buffer.put(instance.x()).put(instance.y()).put(instance.z()).put(instance.yawRadians());
-                buffer.put(instance.animationPhase()).put(instance.animationId());
-                buffer.put(instance.red()).put(instance.green()).put(instance.blue()).put(instance.alpha());
-                buffer.put(instance.blockLight()).put(instance.skyLight());
-                buffer.put(instance.poseIndex());
-            }
-            buffer.flip();
-            glBindBuffer(GL_ARRAY_BUFFER, instanceBuffer);
-            if (instances.size() > instanceCapacity) {
-                instanceCapacity = Math.max(1, Integer.highestOneBit(instances.size() - 1) << 1);
-                glBufferData(GL_ARRAY_BUFFER, (long) instanceCapacity * INSTANCE_STRIDE, GL_STREAM_DRAW);
-            }
-            glBufferSubData(GL_ARRAY_BUFFER, 0, buffer);
-        } finally {
-            MemoryUtil.memFree(buffer);
+        int requiredFloats = instances.size() * INSTANCE_FLOATS;
+        if (staging == null || staging.capacity() < requiredFloats) {
+            if (staging != null) MemoryUtil.memFree(staging);
+            int capacity = Math.max(INSTANCE_FLOATS,
+                    Integer.highestOneBit(requiredFloats - 1) << 1);
+            staging = MemoryUtil.memAllocFloat(capacity);
         }
+        staging.clear();
+        for (InstanceData instance : instances) {
+            staging.put(instance.x()).put(instance.y()).put(instance.z()).put(instance.yawRadians());
+            staging.put(instance.animationPhase()).put(instance.animationId());
+            staging.put(instance.red()).put(instance.green()).put(instance.blue()).put(instance.alpha());
+            staging.put(instance.blockLight()).put(instance.skyLight());
+            staging.put(instance.poseIndex());
+        }
+        staging.flip();
+        glBindBuffer(GL_ARRAY_BUFFER, instanceBuffer);
+        if (instances.size() > instanceCapacity) {
+            instanceCapacity = Math.max(1, Integer.highestOneBit(instances.size() - 1) << 1);
+        }
+        // Orphaning avoids waiting when shared geometry is redrawn immediately with another material batch.
+        glBufferData(GL_ARRAY_BUFFER, (long) instanceCapacity * INSTANCE_STRIDE, GL_STREAM_DRAW);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, staging);
     }
 
     public void draw(int instanceCount) {
@@ -102,6 +107,7 @@ public final class GpuMesh implements AutoCloseable {
 
     @Override
     public void close() {
+        if (staging != null) MemoryUtil.memFree(staging);
         glDeleteBuffers(instanceBuffer);
         glDeleteBuffers(indexBuffer);
         glDeleteBuffers(vertexBuffer);

@@ -83,7 +83,7 @@ public final class CrowdRenderer {
                 if (layer == null) throw new IllegalStateException("Recruits visual layer produced no geometry: " + layerTexture);
                 add(layer, InstanceData.from(entity, partialTick, packedLight, layer.tint(), poseIndex));
             }
-            for (MeshHandle equipment : cache.equipment(entity)) {
+            for (MeshHandle equipment : cache.equipment(entity, model)) {
                 add(equipment, InstanceData.from(entity, partialTick, packedLight, equipment.tint(), poseIndex));
             }
             submittedEntities.add(entity.getId());

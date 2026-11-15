@@ -11,6 +11,7 @@ import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.DyeableLeatherItem;
@@ -44,7 +45,7 @@ public final class MeshCache implements AutoCloseable {
         return body(model, texture);
     }
 
-    public List<MeshHandle> equipment(LivingEntity entity) {
+    public List<MeshHandle> equipment(LivingEntity entity, HumanoidModel<?> bodyModel) {
         ItemStack head = entity.getItemBySlot(EquipmentSlot.HEAD);
         if (!head.isEmpty() && !(head.getItem() instanceof ArmorItem)) {
             throw new IllegalStateException("Non-armor head item requires the vanilla custom-head layer: " +
@@ -55,8 +56,9 @@ public final class MeshCache implements AutoCloseable {
         armor(entity, EquipmentSlot.CHEST, result);
         armor(entity, EquipmentSlot.LEGS, result);
         armor(entity, EquipmentSlot.FEET, result);
-        item(entity, entity.getMainHandItem(), false, result);
-        item(entity, entity.getOffhandItem(), true, result);
+        boolean mainUsesLeftArm = entity.getMainArm() == HumanoidArm.LEFT;
+        item(entity, entity.getMainHandItem(), mainUsesLeftArm, MeshKey.Kind.MAIN_HAND, bodyModel, result);
+        item(entity, entity.getOffhandItem(), !mainUsesLeftArm, MeshKey.Kind.OFF_HAND, bodyModel, result);
         return result;
     }
 
@@ -126,19 +128,21 @@ public final class MeshCache implements AutoCloseable {
         }
     }
 
-    private void item(LivingEntity entity, ItemStack stack, boolean left, List<MeshHandle> result) {
+    private void item(LivingEntity entity, ItemStack stack, boolean left, MeshKey.Kind kind,
+                      HumanoidModel<?> bodyModel, List<MeshHandle> result) {
         if (stack.isEmpty()) return;
         ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(stack.getItem());
-        MeshKey.Kind kind = left ? MeshKey.Kind.OFF_HAND : MeshKey.Kind.MAIN_HAND;
         ResourceLocation texture = stack.getItem() instanceof ShieldItem ? Sheets.SHIELD_SHEET : ITEM_ATLAS;
         boolean using = entity.isUsingItem() && entity.getUseItem() == stack;
         boolean charged = stack.getItem() instanceof CrossbowItem && CrossbowItem.isCharged(stack);
         int visualTag = stack.hasTag() ? stack.getTag().hashCode() : 0;
-        String geometry = itemId + ":" + (left ? "left" : "right") + ":" + using + ":" + charged + ":" + visualTag;
+        String geometry = itemId + ":" + bodyModel.getClass().getName() + ":" +
+                (left ? "left" : "right") + ":" + using + ":" + charged + ":" + visualTag;
         MeshKey key = new MeshKey(geometry, texture,
                 left ? HumanoidMeshConverter.LEFT_ARM : HumanoidMeshConverter.RIGHT_ARM, kind);
         MeshHandle handle = handle(key, geometry, texture, 0xFFFFFFFF, true,
-                () -> ItemMeshConverter.convert(entity, stack, left));
+                () -> ItemMeshConverter.convert(entity, stack, left,
+                        left ? bodyModel.leftArm : bodyModel.rightArm));
         if (handle == null) throw new IllegalStateException("Item model produced no geometry: " + itemId);
         result.add(handle);
     }
