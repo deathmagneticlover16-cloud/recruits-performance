@@ -43,7 +43,6 @@ public final class CrowdRenderer {
     private final Set<Integer> submittedEntities = new HashSet<>();
     private final Set<String> warnedConversions = new HashSet<>();
     private final List<PoseData> poses = new ArrayList<>();
-    private final Map<Integer, Integer> poseByEntity = new HashMap<>();
     private MeshCache cache;
     private CrowdShader shader;
     private CrowdPoseBuffer poseBuffer;
@@ -59,8 +58,8 @@ public final class CrowdRenderer {
         if (entity.isInvisible() || entity.isCurrentlyGlowing()) return false;
         if (submittedEntities.size() >= CrowdRendererConfig.maximumInstances.get()) return false;
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.gameRenderer.getMainCamera().getPosition().distanceToSqr(entity.position()) >
-                CrowdRendererConfig.renderDistance.get() * CrowdRendererConfig.renderDistance.get()) return false;
+        double distanceSquared = minecraft.gameRenderer.getMainCamera().getPosition().distanceToSqr(entity.position());
+        if (distanceSquared > CrowdRendererConfig.renderDistance.get() * CrowdRendererConfig.renderDistance.get()) return false;
         if (!(renderer.getModel() instanceof HumanoidModel<?> model)) {
             fallbacks++;
             return false;
@@ -72,20 +71,22 @@ public final class CrowdRenderer {
             float modelScale = RecruitVisualLayers.modelScale(texture);
             MeshHandle body = cache.body(model, texture);
             if (body == null) return false;
-            HumanoidModel<LivingEntity> typedModel = (HumanoidModel<LivingEntity>) model;
-            int poseIndex = poseByEntity.computeIfAbsent(entity.getId(), ignored -> {
+            int poseIndex = -1;
+            double exactDistance = CrowdRendererConfig.exactPoseDistance.get();
+            if (CrowdRendererConfig.gpuAnimation.get() && distanceSquared <= exactDistance * exactDistance) {
+                HumanoidModel<LivingEntity> typedModel = (HumanoidModel<LivingEntity>) model;
+                poseIndex = poses.size();
                 poses.add(HumanoidPoseEvaluator.evaluate(typedModel, entity, partialTick));
-                return poses.size() - 1;
-            });
-            add(body, InstanceData.from(entity, partialTick, packedLight, body.tint(), poseIndex, modelScale));
+            }
+            InstanceData instance = InstanceData.from(entity, partialTick, packedLight, poseIndex, modelScale);
+            add(body, instance.tinted(body.tint()));
             for (ResourceLocation layerTexture : RecruitVisualLayers.textures(entity, texture)) {
                 MeshHandle layer = cache.bodyLayer(model, layerTexture);
                 if (layer == null) throw new IllegalStateException("Recruits visual layer produced no geometry: " + layerTexture);
-                add(layer, InstanceData.from(entity, partialTick, packedLight, layer.tint(), poseIndex, modelScale));
+                add(layer, instance.tinted(layer.tint()));
             }
             for (MeshHandle equipment : cache.equipment(entity, model)) {
-                add(equipment, InstanceData.from(entity, partialTick, packedLight,
-                        equipment.tint(), poseIndex, modelScale));
+                add(equipment, instance.tinted(equipment.tint()));
             }
             if (CrowdRendererConfig.optimizedShadows.get()) ShadowSuppressor.suppress(renderer);
             submittedEntities.add(entity.getId());
@@ -154,7 +155,6 @@ public final class CrowdRenderer {
             batches.clear();
             submittedEntities.clear();
             poses.clear();
-            poseByEntity.clear();
             fallbacks = 0;
         }
     }
@@ -164,7 +164,6 @@ public final class CrowdRenderer {
             batches.clear();
             submittedEntities.clear();
             poses.clear();
-            poseByEntity.clear();
             if (cache != null) cache.close();
             if (shader != null) shader.close();
             if (poseBuffer != null) poseBuffer.close();
@@ -208,7 +207,6 @@ public final class CrowdRenderer {
     private void removeEntity(int entityId) {
         batches.values().forEach(batch -> batch.instances.removeIf(instance -> instance.entityId() == entityId));
         submittedEntities.remove(entityId);
-        poseByEntity.remove(entityId);
     }
 
     private static final class Batch {

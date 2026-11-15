@@ -51,7 +51,7 @@ public final class CrowdShader implements AutoCloseable {
 
             mat3 boneRotation(int bone) {
                 if (uAnimationEnabled < 0.5) return mat3(1.0);
-                int pose = int(iPoseIndex + 0.5);
+                int pose = int(floor(iPoseIndex + 0.5));
                 if (pose >= 0 && pose < uPoseCount) {
                     int texel = pose * 12 + bone * 2;
                     vec3 angles = texelFetch(uPoseBuffer, texel).xyz;
@@ -82,7 +82,7 @@ public final class CrowdShader implements AutoCloseable {
                 vec3 p = vec3(-aPosition.x, -aPosition.y + 1.5, aPosition.z);
                 vec3 n = vec3(-aNormal.x, -aNormal.y, aNormal.z);
                 vec3 joint = pivot(bone);
-                int pose = int(iPoseIndex + 0.5);
+                int pose = int(floor(iPoseIndex + 0.5));
                 if (uAnimationEnabled >= 0.5 && pose >= 0 && pose < uPoseCount) {
                     vec3 posePivot = texelFetch(uPoseBuffer, pose * 12 + bone * 2 + 1).xyz;
                     joint = vec3(-posePivot.x, -posePivot.y + 1.5, posePivot.z);

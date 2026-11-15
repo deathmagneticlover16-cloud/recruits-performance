@@ -11,6 +11,7 @@ public final class CrowdRendererConfig {
     public static final ForgeConfigSpec.BooleanValue diagnostics;
     public static final ForgeConfigSpec.IntValue maximumInstances;
     public static final ForgeConfigSpec.DoubleValue renderDistance;
+    public static final ForgeConfigSpec.DoubleValue exactPoseDistance;
     public static final ForgeConfigSpec.IntValue meshCacheMegabytes;
 
     static {
@@ -28,6 +29,8 @@ public final class CrowdRendererConfig {
                 .defineInRange("maximumInstances", 8192, 128, 32768);
         renderDistance = builder.comment("Maximum crowd-render distance in blocks.")
                 .defineInRange("renderDistance", 384.0, 32.0, 2048.0);
+        exactPoseDistance = builder.comment("Distance for exact source-model pose capture; farther recruits use shared GPU animation states.")
+                .defineInRange("exactPoseDistance", 96.0, 0.0, 512.0);
         meshCacheMegabytes = builder.comment("Approximate GPU mesh-cache budget.")
                 .defineInRange("meshCacheMegabytes", 384, 64, 2048);
         builder.pop();
