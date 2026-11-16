@@ -4,6 +4,8 @@ Run `./gradlew clean build contractTests`. The contract suite checks formation g
 
 For an in-game smoke test:
 
+Before visual testing on AMD, inspect `logs/recruits-performance-shaders`. Startup must log a successful minimal GLSL preflight followed by the crowd vertex and fragment source digests. On the affected RX 570, confirm initialization passes `glShaderSource`, shader compilation and program linking without creating a new `hs_err_pid*.log`.
+
 1. Install Recruits and this mod, start a Forge 1.20.1 client, and create a disposable world.
 2. Spawn human and villager recruits with no equipment. Confirm they render once and remain depth-occluded by terrain.
 3. Equip distinct vanilla and all supplied Epic Knights addon armor/decorations in every slot, plus swords, polearms, bows, crossbows and shields. Confirm each component follows the correct animated limb; verify dyed overlays and patterned surcoats.

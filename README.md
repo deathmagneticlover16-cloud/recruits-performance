@@ -22,7 +22,7 @@ Epic Knights and Recruits RTS are optional integrations. Their conventional huma
 ./gradlew clean build
 ```
 
-The distributable JAR is written to `build/libs/recruits-performance-1.20.1-1.0.0-alpha.2.jar`. The checked-in wrapper verifies Gradle 8.5 with its official SHA-256 checksum.
+The distributable JAR is written to `build/libs/recruits-performance-1.20.1-1.0.0-alpha.3.jar`. The checked-in wrapper verifies Gradle 8.5 with its official SHA-256 checksum.
 
 ## Install
 
@@ -42,6 +42,7 @@ Client settings are generated at `config/recruits-performance-client.toml`. The 
 - Cruor-bloodied weapons, foil/glint equipment, glowing entities, custom heads and unsupported dynamic layers deliberately retain their source renderer instead of folding incompatible material passes into the block atlas.
 - Converted names are rendered in the world pass using Minecraft's font, background-opacity, packed-light and discrete-name distance behavior.
 - Resource reload destroys all GPU objects and lazily rebuilds them from the newly baked models.
+- Shader initialization writes the exact minimal and crowd GLSL sources to `logs/recruits-performance-shaders`, records their types, byte lengths and SHA-256 digests, and uses guarded NUL-terminated native buffers for AMD driver safety.
 - Minecraft's depth buffer, camera matrices, fog, alpha cutout and sampled block/sky light remain active for the crowd pass.
 - Recruits RTS movement hints and ordinary entity combat/use state select GPU animation states without changing server-authoritative gameplay.
 

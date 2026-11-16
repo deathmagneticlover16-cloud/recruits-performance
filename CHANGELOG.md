@@ -1,3 +1,11 @@
+# 1.0.0 Alpha 3
+
+- Fixed the confirmed AMD `atio6axx.dll` access violation during `glShaderSource` on Radeon RX 570.
+- Replaced LWJGL's non-NUL-terminated `CharSequence` submission with an explicitly owned, NUL-terminated UTF-8 allocation, 64 zeroed guard bytes and a `NULL` lengths pointer.
+- Added render-thread/OpenGL 3.3 context validation and a minimal vertex/fragment compile-link preflight before the crowd shaders.
+- Persisted and logged each exact GLSL source, type, UTF-8 byte length and SHA-256 digest before its native submission.
+- Added driver source round-trip validation, required-uniform validation and complete shader/program cleanup on recoverable initialization failures.
+
 # 1.0.0 Alpha 2
 
 - Replaced the six-Euler pose palette with sixteen 3x4 skin matrices for exact close-range hierarchy animation.

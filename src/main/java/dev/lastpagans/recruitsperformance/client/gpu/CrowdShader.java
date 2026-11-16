@@ -2,15 +2,42 @@ package dev.lastpagans.recruitsperformance.client.gpu;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import dev.lastpagans.recruitsperformance.RecruitsPerformance;
+import net.minecraft.client.Minecraft;
 import org.joml.Matrix4f;
+import org.lwjgl.PointerBuffer;
+import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL20C;
 import org.lwjgl.system.MemoryStack;
+import org.lwjgl.system.MemoryUtil;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
 import java.nio.FloatBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 
 import static org.lwjgl.opengl.GL20C.*;
 
 public final class CrowdShader implements AutoCloseable {
+    private static final int SOURCE_GUARD_BYTES = 64;
+    private static final int MAX_SOURCE_BYTES = 1024 * 1024;
+    private static final String MINIMAL_VERTEX = """
+            #version 330 core
+            layout(location=0) in vec3 position;
+            void main() { gl_Position = vec4(position, 1.0); }
+            """;
+    private static final String MINIMAL_FRAGMENT = """
+            #version 330 core
+            out vec4 color;
+            void main() { color = vec4(1.0); }
+            """;
     private static final String VERTEX = """
             #version 330 core
             layout(location=0) in vec3 aPosition;
@@ -152,32 +179,43 @@ public final class CrowdShader implements AutoCloseable {
     private final int fogEnd;
 
     public CrowdShader() {
-        int vertex = compile(GL_VERTEX_SHADER, VERTEX);
-        int fragment = compile(GL_FRAGMENT_SHADER, FRAGMENT);
-        program = glCreateProgram();
-        glAttachShader(program, vertex);
-        glAttachShader(program, fragment);
-        glLinkProgram(program);
-        if (glGetProgrami(program, GL_LINK_STATUS) == GL_FALSE) {
-            String log = glGetProgramInfoLog(program);
-            glDeleteShader(vertex);
-            glDeleteShader(fragment);
-            glDeleteProgram(program);
-            throw new IllegalStateException("Crowd shader link failed: " + log);
+        validateContext();
+        runMinimalPreflight();
+        int created = buildProgram(VERTEX, FRAGMENT, "crowd");
+        int localProjection;
+        int localView;
+        int localCamera;
+        int localAnimationEnabled;
+        int localPoseCount;
+        int localFogColor;
+        int localFogStart;
+        int localFogEnd;
+        try {
+            localProjection = uniform(created, "uProjection");
+            localView = uniform(created, "uView");
+            localCamera = uniform(created, "uCamera");
+            localAnimationEnabled = uniform(created, "uAnimationEnabled");
+            localPoseCount = uniform(created, "uPoseCount");
+            localFogColor = uniform(created, "uFogColor");
+            localFogStart = uniform(created, "uFogStart");
+            localFogEnd = uniform(created, "uFogEnd");
+            glUseProgram(created);
+            glUniform1i(uniform(created, "uTexture"), 0);
+            glUniform1i(uniform(created, "uPoseBuffer"), 1);
+            checkNoGlError("initializing crowd shader uniforms");
+        } catch (RuntimeException | Error failure) {
+            glDeleteProgram(created);
+            throw failure;
         }
-        glDeleteShader(vertex);
-        glDeleteShader(fragment);
-        projection = glGetUniformLocation(program, "uProjection");
-        view = glGetUniformLocation(program, "uView");
-        camera = glGetUniformLocation(program, "uCamera");
-        animationEnabled = glGetUniformLocation(program, "uAnimationEnabled");
-        poseCount = glGetUniformLocation(program, "uPoseCount");
-        fogColor = glGetUniformLocation(program, "uFogColor");
-        fogStart = glGetUniformLocation(program, "uFogStart");
-        fogEnd = glGetUniformLocation(program, "uFogEnd");
-        use();
-        glUniform1i(glGetUniformLocation(program, "uTexture"), 0);
-        glUniform1i(glGetUniformLocation(program, "uPoseBuffer"), 1);
+        program = created;
+        projection = localProjection;
+        view = localView;
+        camera = localCamera;
+        animationEnabled = localAnimationEnabled;
+        poseCount = localPoseCount;
+        fogColor = localFogColor;
+        fogStart = localFogStart;
+        fogEnd = localFogEnd;
     }
 
     public void use() { glUseProgram(program); }
@@ -199,17 +237,195 @@ public final class CrowdShader implements AutoCloseable {
     @Override
     public void close() { glDeleteProgram(program); }
 
-    private static int compile(int type, String source) {
-        int shader = glCreateShader(type);
-        glShaderSource(shader, source);
-        glCompileShader(shader);
-        if (glGetShaderi(shader, GL_COMPILE_STATUS) == GL_FALSE) {
-            String log = glGetShaderInfoLog(shader);
-            glDeleteShader(shader);
-            RecruitsPerformance.LOGGER.error("Crowd shader compile failure: {}", log);
-            throw new IllegalStateException(log);
+    private static int buildProgram(String vertexSource, String fragmentSource, String label) {
+        int vertex = 0;
+        int fragment = 0;
+        int linkedProgram = 0;
+        boolean success = false;
+        try {
+            vertex = compile(GL_VERTEX_SHADER, vertexSource, label + "-vertex");
+            fragment = compile(GL_FRAGMENT_SHADER, fragmentSource, label + "-fragment");
+            linkedProgram = glCreateProgram();
+            if (linkedProgram == 0) throw new IllegalStateException("OpenGL returned program id 0 for " + label);
+            glAttachShader(linkedProgram, vertex);
+            glAttachShader(linkedProgram, fragment);
+            glLinkProgram(linkedProgram);
+            if (glGetProgrami(linkedProgram, GL_LINK_STATUS) == GL_FALSE) {
+                throw new IllegalStateException(label + " shader link failed: " + glGetProgramInfoLog(linkedProgram));
+            }
+            checkNoGlError("linking " + label + " shader program");
+            success = true;
+            return linkedProgram;
+        } finally {
+            if (vertex != 0) glDeleteShader(vertex);
+            if (fragment != 0) glDeleteShader(fragment);
+            if (!success && linkedProgram != 0) glDeleteProgram(linkedProgram);
         }
-        return shader;
+    }
+
+    private static int compile(int type, String source, String label) {
+        SourceSnapshot snapshot = captureSource(type, source, label);
+        int shader = glCreateShader(type);
+        if (shader == 0) throw new IllegalStateException("OpenGL returned shader id 0 for " + label);
+        try {
+            submitNullTerminated(shader, snapshot);
+            String accepted = glGetShaderSource(shader);
+            if (accepted == null) {
+                throw new IllegalStateException(label + " source round-trip returned null");
+            }
+            if (!source.equals(accepted)) {
+                throw new IllegalStateException(label + " source round-trip mismatch: submitted "
+                        + snapshot.byteLength + " UTF-8 bytes, driver returned "
+                        + accepted.getBytes(StandardCharsets.UTF_8).length);
+            }
+            glCompileShader(shader);
+            if (glGetShaderi(shader, GL_COMPILE_STATUS) == GL_FALSE) {
+                String log = glGetShaderInfoLog(shader);
+                throw new IllegalStateException(label + " compile failed: " + log);
+            }
+            checkNoGlError("compiling " + label);
+            return shader;
+        } catch (RuntimeException | Error failure) {
+            glDeleteShader(shader);
+            RecruitsPerformance.LOGGER.error("Crowd shader stage failed: label={} type={} sha256={} dump={}",
+                    label, snapshot.typeName, snapshot.sha256, snapshot.dump, failure);
+            throw failure;
+        }
+    }
+
+    private static void submitNullTerminated(int shader, SourceSnapshot snapshot) {
+        ByteBuffer nativeSource = MemoryUtil.memCalloc(snapshot.bytes.length + 1 + SOURCE_GUARD_BYTES);
+        PointerBuffer pointers = MemoryUtil.memAllocPointer(1);
+        try {
+            nativeSource.put(snapshot.bytes);
+            nativeSource.position(0);
+            pointers.put(0, MemoryUtil.memAddress(nativeSource));
+            RecruitsPerformance.LOGGER.info(
+                    "Submitting GLSL to OpenGL: label={} type={} chars={} utf8Bytes={} sha256={} "
+                            + "lengths=NULL nulTerminated=true guardBytes={} dump={}\n"
+                            + "----- BEGIN EXACT {} SOURCE -----\n{}----- END EXACT {} SOURCE -----",
+                    snapshot.label, snapshot.typeName, snapshot.charLength, snapshot.byteLength,
+                    snapshot.sha256, SOURCE_GUARD_BYTES, snapshot.dump,
+                    snapshot.label, snapshot.source, snapshot.label);
+            // The CharSequence overload uses LWJGL's temporary stack array and a non-NULL length pointer.
+            // Keeping our direct UTF-8 allocation alive and passing lengths=NULL avoids that AMD crash path.
+            glShaderSource(shader, pointers, (java.nio.IntBuffer) null);
+            checkNoGlError("submitting " + snapshot.label + " source");
+        } finally {
+            MemoryUtil.memFree(pointers);
+            MemoryUtil.memFree(nativeSource);
+        }
+    }
+
+    private static SourceSnapshot captureSource(int type, String source, String label) {
+        if (source.isEmpty()) throw new IllegalArgumentException(label + " source is empty");
+        if (source.indexOf('\0') >= 0) throw new IllegalArgumentException(label + " source contains an embedded NUL");
+        byte[] bytes = strictUtf8(source, label);
+        if (bytes.length > MAX_SOURCE_BYTES) {
+            throw new IllegalArgumentException(label + " source is too large: " + bytes.length + " bytes");
+        }
+        String sha256 = sha256(bytes);
+        String typeName = shaderType(type);
+        Path dump = shaderDumpPath(label, typeName, sha256);
+        try {
+            Files.createDirectories(dump.getParent());
+            Files.write(dump, bytes);
+        } catch (IOException failure) {
+            throw new IllegalStateException("Could not persist exact GLSL source before native submission: " + dump,
+                    failure);
+        }
+        return new SourceSnapshot(label, typeName, source, bytes, source.length(), bytes.length, sha256, dump);
+    }
+
+    private static byte[] strictUtf8(String source, String label) {
+        try {
+            ByteBuffer encoded = StandardCharsets.UTF_8.newEncoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .encode(CharBuffer.wrap(source));
+            byte[] bytes = new byte[encoded.remaining()];
+            encoded.get(bytes);
+            return bytes;
+        } catch (CharacterCodingException failure) {
+            throw new IllegalArgumentException(label + " source is not valid UTF-8", failure);
+        }
+    }
+
+    private static String sha256(byte[] source) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(source));
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 is unavailable", impossible);
+        }
+    }
+
+    private static Path shaderDumpPath(String label, String type, String sha256) {
+        Path gameDirectory = Minecraft.getInstance().gameDirectory.toPath();
+        return gameDirectory.resolve("logs").resolve("recruits-performance-shaders")
+                .resolve(label + "-" + type.toLowerCase() + "-" + sha256.substring(0, 12) + ".glsl");
+    }
+
+    private static void validateContext() {
+        if (!RenderSystem.isOnRenderThread()) {
+            throw new IllegalStateException("Crowd shader initialization attempted off the render thread");
+        }
+        var capabilities = GL.getCapabilities();
+        if (!capabilities.OpenGL33) {
+            throw new IllegalStateException("Crowd renderer requires an OpenGL 3.3 context");
+        }
+        drainPreexistingGlErrors();
+        String vendor = org.lwjgl.opengl.GL11C.glGetString(org.lwjgl.opengl.GL11C.GL_VENDOR);
+        String renderer = org.lwjgl.opengl.GL11C.glGetString(org.lwjgl.opengl.GL11C.GL_RENDERER);
+        String version = org.lwjgl.opengl.GL11C.glGetString(org.lwjgl.opengl.GL11C.GL_VERSION);
+        String shadingLanguage = org.lwjgl.opengl.GL11C.glGetString(
+                org.lwjgl.opengl.GL20C.GL_SHADING_LANGUAGE_VERSION);
+        if (vendor == null || renderer == null || version == null || shadingLanguage == null) {
+            throw new IllegalStateException("OpenGL context strings are unavailable on the render thread");
+        }
+        RecruitsPerformance.LOGGER.info(
+                "Crowd shader OpenGL context: vendor={} renderer={} version={} glsl={} thread={}",
+                vendor, renderer, version, shadingLanguage, Thread.currentThread().getName());
+        checkNoGlError("validating the OpenGL context");
+    }
+
+    private static void drainPreexistingGlErrors() {
+        int error;
+        int count = 0;
+        while ((error = org.lwjgl.opengl.GL11C.glGetError()) != org.lwjgl.opengl.GL11C.GL_NO_ERROR
+                && count++ < 16) {
+            RecruitsPerformance.LOGGER.warn(
+                    "Clearing pre-existing OpenGL error 0x{} before crowd shader initialization",
+                    Integer.toHexString(error));
+        }
+    }
+
+    private static void runMinimalPreflight() {
+        RecruitsPerformance.LOGGER.info("Starting minimal GLSL submission preflight");
+        int minimalProgram = buildProgram(MINIMAL_VERTEX, MINIMAL_FRAGMENT, "preflight");
+        glDeleteProgram(minimalProgram);
+        checkNoGlError("deleting the minimal preflight program");
+        RecruitsPerformance.LOGGER.info("Minimal GLSL submission preflight passed");
+    }
+
+    private static int uniform(int shaderProgram, String name) {
+        int location = glGetUniformLocation(shaderProgram, name);
+        if (location < 0) throw new IllegalStateException("Required crowd shader uniform is missing: " + name);
+        return location;
+    }
+
+    private static void checkNoGlError(String operation) {
+        int error = org.lwjgl.opengl.GL11C.glGetError();
+        if (error != org.lwjgl.opengl.GL11C.GL_NO_ERROR) {
+            throw new IllegalStateException("OpenGL error 0x" + Integer.toHexString(error) + " while " + operation);
+        }
+    }
+
+    private static String shaderType(int type) {
+        return switch (type) {
+            case GL_VERTEX_SHADER -> "VERTEX";
+            case GL_FRAGMENT_SHADER -> "FRAGMENT";
+            default -> "0x" + Integer.toHexString(type);
+        };
     }
 
     private static void matrix(int location, Matrix4f value) {
@@ -219,4 +435,7 @@ public final class CrowdShader implements AutoCloseable {
             GL20C.glUniformMatrix4fv(location, false, data);
         }
     }
+
+    private record SourceSnapshot(String label, String typeName, String source, byte[] bytes,
+                                  int charLength, int byteLength, String sha256, Path dump) {}
 }
