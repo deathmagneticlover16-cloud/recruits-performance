@@ -1,6 +1,5 @@
 package dev.lastpagans.recruitsperformance.client.scene;
 
-import dev.lastpagans.recruitsperformance.client.compat.BetterCombatCompat;
 import dev.lastpagans.recruitsperformance.client.compat.IcysHorsesCompat;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.LivingEntity;
@@ -30,8 +29,6 @@ public record InstanceData(
         float phase;
         if (animation == CrowdAnimation.DEATH) {
             phase = entity.deathTime + partialTick;
-        } else if (animation == CrowdAnimation.BETTER_COMBAT) {
-            phase = BetterCombatCompat.animationPhase(entity, partialTick);
         } else {
             phase = entity.tickCount + partialTick + (entity.getId() * 0.6180339F % 1.0F) * 20.0F;
         }

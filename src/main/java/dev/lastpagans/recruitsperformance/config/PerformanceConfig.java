@@ -5,8 +5,6 @@ import net.minecraftforge.common.ForgeConfigSpec;
 public final class PerformanceConfig {
     public static final ForgeConfigSpec SPEC;
 
-    public static ForgeConfigSpec.BooleanValue newBrain;
-    public static ForgeConfigSpec.BooleanValue aiScheduler;
     public static ForgeConfigSpec.BooleanValue simulationLod;
     public static ForgeConfigSpec.BooleanValue goalSuppression;
     public static ForgeConfigSpec.BooleanValue sharedPerception;
@@ -46,8 +44,6 @@ public final class PerformanceConfig {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
 
         b.push("features");
-        newBrain = b.comment("Enable lightweight runtime brains.").define("newBrain", true);
-        aiScheduler = b.comment("Distribute Performance-mod work through the global scheduler.").define("aiScheduler", true);
         simulationLod = b.comment("Assign HOT/WARM/COLD/DORMANT update tiers.").define("simulationLod", true);
         goalSuppression = future(b, "goalSuppression");
         sharedPerception = future(b, "sharedPerception");

@@ -16,6 +16,8 @@ public final class HumanoidMeshConverter {
     public static final int LEFT_ARM = 3;
     public static final int RIGHT_LEG = 4;
     public static final int LEFT_LEG = 5;
+    public static final int RIGHT_ITEM = 6;
+    public static final int LEFT_ITEM = 7;
 
     private HumanoidMeshConverter() {}
 

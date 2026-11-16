@@ -107,9 +107,7 @@ public final class RecruitsPerfCommands {
     }
 
     private static int features(CommandContext<CommandSourceStack> context) {
-        send(context, "features brain=" + PerformanceConfig.newBrain.get()
-                + " scheduler=" + PerformanceConfig.aiScheduler.get()
-                + " simLOD=" + PerformanceConfig.simulationLod.get()
+        send(context, "features simLOD=" + PerformanceConfig.simulationLod.get()
                 + " goalSuppression=" + PerformanceConfig.goalSuppression.get()
                 + " perception=" + PerformanceConfig.sharedPerception.get()
                 + " steering=" + PerformanceConfig.localSteering.get()

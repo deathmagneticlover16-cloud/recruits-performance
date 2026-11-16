@@ -4,7 +4,6 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.lastpagans.recruitsperformance.RecruitsPerformance;
 import dev.lastpagans.recruitsperformance.client.diagnostics.CrowdDiagnostics;
-import dev.lastpagans.recruitsperformance.client.compat.BetterCombatCompat;
 import dev.lastpagans.recruitsperformance.client.compat.IcysHorsesCompat;
 import dev.lastpagans.recruitsperformance.client.compat.ShaderPackCompat;
 import dev.lastpagans.recruitsperformance.client.gpu.CrowdShader;
@@ -33,6 +32,7 @@ import org.joml.Matrix4f;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -51,6 +51,13 @@ public final class CrowdRenderer {
     private final Set<Integer> submittedEntities = new HashSet<>();
     private final Set<String> warnedConversions = new HashSet<>();
     private final List<PoseData> poses = new ArrayList<>();
+    private final Map<HumanoidPoseEvaluator.PoseKey, Integer> framePoseIndices = new HashMap<>();
+    private final Map<HumanoidPoseEvaluator.PoseKey, PoseData> posePalette = new LinkedHashMap<>(256, 0.75F, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<HumanoidPoseEvaluator.PoseKey, PoseData> eldest) {
+            return size() > 2048;
+        }
+    };
     private final List<Nameplate> nameplates = new ArrayList<>();
     private MeshCache cache;
     private CrowdShader shader;
@@ -90,15 +97,8 @@ public final class CrowdRenderer {
             boolean cruorDetail = distanceSquared <= cruorDistance * cruorDistance;
             MeshHandle body = cache.body(model, texture, fullDetail);
             if (body == null) return false;
-            int poseIndex = -1;
-            double exactDistance = CrowdRendererConfig.exactPoseDistance.get();
-            if (CrowdRendererConfig.gpuAnimation.get()
-                    && !BetterCombatCompat.hasActiveAttackAnimation(entity)
-                    && distanceSquared <= exactDistance * exactDistance) {
-                HumanoidModel<LivingEntity> typedModel = (HumanoidModel<LivingEntity>) model;
-                poseIndex = poses.size();
-                poses.add(HumanoidPoseEvaluator.evaluate(typedModel, entity, partialTick));
-            }
+            int poseIndex = CrowdRendererConfig.gpuAnimation.get()
+                    ? poseIndex((HumanoidModel<LivingEntity>) model, entity, partialTick) : -1;
             InstanceData instance = InstanceData.from(entity, partialTick, packedLight, poseIndex, modelScale);
             add(body, instance.tinted(body.tint()));
             for (ResourceLocation layerTexture : RecruitVisualLayers.textures(entity, texture)) {
@@ -218,6 +218,7 @@ public final class CrowdRenderer {
             batches.clear();
             submittedEntities.clear();
             poses.clear();
+            framePoseIndices.clear();
             nameplates.clear();
             fallbacks = 0;
         }
@@ -228,6 +229,8 @@ public final class CrowdRenderer {
             batches.clear();
             submittedEntities.clear();
             poses.clear();
+            framePoseIndices.clear();
+            posePalette.clear();
             nameplates.clear();
             if (cache != null) cache.close();
             if (shader != null) shader.close();
@@ -269,6 +272,21 @@ public final class CrowdRenderer {
         batches.computeIfAbsent(handle.key(), ignored -> new Batch(handle)).instances.add(instance);
     }
 
+    private int poseIndex(HumanoidModel<LivingEntity> model, LivingEntity entity, float partialTick) {
+        HumanoidPoseEvaluator.PoseKey key = HumanoidPoseEvaluator.cacheKey(model, entity, partialTick);
+        Integer existing = framePoseIndices.get(key);
+        if (existing != null) return existing;
+        PoseData pose = posePalette.get(key);
+        if (pose == null) {
+            pose = HumanoidPoseEvaluator.evaluate(model, entity, partialTick);
+            posePalette.put(key, pose);
+        }
+        int index = poses.size();
+        poses.add(pose);
+        framePoseIndices.put(key, index);
+        return index;
+    }
+
     private void removeEntity(int entityId) {
         batches.values().forEach(batch -> batch.instances.removeIf(instance -> instance.entityId() == entityId));
         submittedEntities.remove(entityId);
@@ -276,7 +294,7 @@ public final class CrowdRenderer {
 
     private void queueNameplate(LivingEntity entity, float partialTick, int packedLight, double distanceSquared) {
         double range = entity.isDiscrete() ? 32.0D : 64.0D;
-        if ((!entity.shouldShowName() && !entity.hasCustomName()) || distanceSquared > range * range) return;
+        if (Minecraft.getInstance().crosshairPickEntity != entity || distanceSquared > range * range) return;
         nameplates.add(new Nameplate(entity.getDisplayName(),
                 net.minecraft.util.Mth.lerp(partialTick, entity.xOld, entity.getX()),
                 net.minecraft.util.Mth.lerp(partialTick, entity.yOld, entity.getY()) + entity.getBbHeight() + 0.5D,

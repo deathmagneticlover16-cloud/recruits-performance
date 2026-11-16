@@ -1,3 +1,13 @@
+# 1.0.0 Alpha 6
+
+- Removed every hand-authored walk, run, attack, block, bow, crossbow and Better Combat transform from the crowd shader.
+- Added a bounded shared pose palette generated from Minecraft's active humanoid model, including its native locomotion and item-use poses, at every instanced distance.
+- Added an optional Player Animation Library bridge that applies the active Recruits/Better Combat animation stack and its `leftItem`/`rightItem` weapon channels to dedicated GPU bones.
+- Kept armor, Epic Knights decorations, dyes, overlays and surcoats on the same source-model pose palette, and stopped dropping decoration layers at the geometry LOD boundary.
+- Changed GPU nameplates to queue only for the entity currently under the crosshair.
+- Removed automatic Performance-mod brain observation and rescheduling so native Recruits goals, navigation, move controls, movement attributes and entity ticks remain the only movement authority.
+- Removed the obsolete five-block exact-pose configuration and bumped the mod to `1.0.0-alpha.6`.
+
 # 1.0.0 Alpha 5
 
 - Removed the 72-block source-renderer zone; supported recruits remain GPU-instanced at every distance.

@@ -33,7 +33,7 @@ public final class ItemMeshConverter {
         MeshData.Builder builder = new MeshData.Builder();
         CaptureVertexConsumer consumer = new CaptureVertexConsumer(builder);
         PartPose bind = arm.getInitialPose();
-        consumer.bone(leftHand ? HumanoidMeshConverter.LEFT_ARM : HumanoidMeshConverter.RIGHT_ARM);
+        consumer.bone(leftHand ? HumanoidMeshConverter.LEFT_ITEM : HumanoidMeshConverter.RIGHT_ITEM);
         consumer.pivot(bind.x / 16.0F, bind.y / 16.0F, bind.z / 16.0F);
         MultiBufferSource buffers = renderType -> {
             boolean dynamic = isDynamicForeignPass(renderType);

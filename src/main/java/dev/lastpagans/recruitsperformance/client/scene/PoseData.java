@@ -11,6 +11,10 @@ public record PoseData(float[] values) {
     public static final int TEXELS_PER_BONE = 4;
 
     public static PoseData capture(HumanoidModel<?> model) {
+        return capture(model, new Matrix4f(), new Matrix4f());
+    }
+
+    public static PoseData capture(HumanoidModel<?> model, Matrix4f rightItem, Matrix4f leftItem) {
         float[] values = new float[BONE_COUNT * FLOATS_PER_BONE];
         for (int bone = 0; bone < BONE_COUNT; bone++) putIdentity(values, bone);
         put(values, 0, model.head);
@@ -19,11 +23,19 @@ public record PoseData(float[] values) {
         put(values, 3, model.leftArm);
         put(values, 4, model.rightLeg);
         put(values, 5, model.leftLeg);
+        putItem(values, 6, model.rightArm, rightItem);
+        putItem(values, 7, model.leftArm, leftItem);
         return new PoseData(values);
     }
 
     private static void put(float[] values, int bone, ModelPart part) {
         putMatrix(values, bone, skin(part, new Matrix4f(), new Matrix4f()));
+    }
+
+    private static void putItem(float[] values, int bone, ModelPart arm, Matrix4f itemTransform) {
+        Matrix4f bind = local(arm.getInitialPose());
+        Matrix4f current = local(arm);
+        putMatrix(values, bone, current.mul(itemTransform).mul(bind.invert()));
     }
 
     public static void putMatrix(float[] values, int bone, Matrix4f matrix) {

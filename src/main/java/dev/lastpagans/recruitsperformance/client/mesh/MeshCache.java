@@ -73,10 +73,10 @@ public final class MeshCache implements AutoCloseable {
                     BuiltInRegistries.ITEM.getKey(head.getItem()));
         }
         List<MeshHandle> result = new ArrayList<>(6);
-        armor(entity, EquipmentSlot.HEAD, fullDetail, result);
-        armor(entity, EquipmentSlot.CHEST, fullDetail, result);
-        armor(entity, EquipmentSlot.LEGS, fullDetail, result);
-        armor(entity, EquipmentSlot.FEET, fullDetail, result);
+        armor(entity, EquipmentSlot.HEAD, result);
+        armor(entity, EquipmentSlot.CHEST, result);
+        armor(entity, EquipmentSlot.LEGS, result);
+        armor(entity, EquipmentSlot.FEET, result);
         if (!fullDetail) return result;
         boolean mainUsesLeftArm = entity.getMainArm() == HumanoidArm.LEFT;
         item(entity, entity.getMainHandItem(), mainUsesLeftArm, MeshKey.Kind.MAIN_HAND,
@@ -118,7 +118,7 @@ public final class MeshCache implements AutoCloseable {
         outerArmor = null;
     }
 
-    private void armor(LivingEntity entity, EquipmentSlot slot, boolean includeDecorations, List<MeshHandle> result) {
+    private void armor(LivingEntity entity, EquipmentSlot slot, List<MeshHandle> result) {
         ItemStack stack = entity.getItemBySlot(slot);
         if (!(stack.getItem() instanceof ArmorItem armor)) return;
         if (stack.hasFoil()) throw new IllegalStateException("Foil armor requires the vanilla glint pass");
@@ -151,7 +151,7 @@ public final class MeshCache implements AutoCloseable {
             if (overlayHandle == null) throw new IllegalStateException("Armor overlay produced no geometry: " + itemId);
             result.add(overlayHandle);
         }
-        if (includeDecorations) decorations(stack, result);
+        decorations(stack, result);
     }
 
     private void item(LivingEntity entity, ItemStack stack, boolean left, MeshKey.Kind kind,
@@ -166,7 +166,7 @@ public final class MeshCache implements AutoCloseable {
         String geometry = itemId + ":" + bodyModel.getClass().getName() + ":" +
                 (left ? "left" : "right") + ":" + using + ":" + charged + ":" + visualTag;
         MeshKey key = new MeshKey(geometry, texture,
-                left ? HumanoidMeshConverter.LEFT_ARM : HumanoidMeshConverter.RIGHT_ARM, kind);
+                left ? HumanoidMeshConverter.LEFT_ITEM : HumanoidMeshConverter.RIGHT_ITEM, kind);
         MeshHandle handle = handle(key, geometry, texture, 0xFFFFFFFF, true,
                 () -> ItemMeshConverter.convertBase(entity, stack, left,
                         left ? bodyModel.leftArm : bodyModel.rightArm));
@@ -184,7 +184,7 @@ public final class MeshCache implements AutoCloseable {
         if (stain == null || stain.texture() == null) return;
         String stainGeometry = geometry + ":cruor:" + entity.getId();
         MeshKey stainKey = new MeshKey(stainGeometry, stain.texture(),
-                left ? HumanoidMeshConverter.LEFT_ARM : HumanoidMeshConverter.RIGHT_ARM, kind);
+                left ? HumanoidMeshConverter.LEFT_ITEM : HumanoidMeshConverter.RIGHT_ITEM, kind);
         MeshData precomputed = captured;
         MeshHandle stainHandle = handle(stainKey, stainGeometry, stain.texture(), 0xFFFFFFFF, true,
                 () -> precomputed == null

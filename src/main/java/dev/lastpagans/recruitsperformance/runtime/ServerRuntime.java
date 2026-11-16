@@ -38,7 +38,6 @@ public final class ServerRuntime {
         long time = recruit.level().getGameTime();
         RecruitRuntimeBrain brain = registry.register(recruit, time);
         brain.wake(WakeReason.LOAD, time);
-        scheduleBrain(brain, time, WorkPriority.HIGH);
     }
 
     public void onRecruitUnloaded(UUID recruitId, boolean died) {
@@ -51,7 +50,6 @@ public final class ServerRuntime {
         long time = currentGameTime();
         RecruitRuntimeBrain brain = found.get();
         brain.wake(reason, time);
-        scheduleBrain(brain, time, reason == WakeReason.DAMAGE || reason == WakeReason.PROJECTILE_DAMAGE ? WorkPriority.CRITICAL : WorkPriority.HIGH);
         return true;
     }
 
@@ -60,15 +58,14 @@ public final class ServerRuntime {
             brain.onDamage(gameTime, projectile);
             brain.wake(projectile ? WakeReason.PROJECTILE_DAMAGE : WakeReason.DAMAGE, gameTime);
             metrics.increment(projectile ? Metric.PROJECTILE_WAKE_EVENTS : Metric.DAMAGE_WAKE_EVENTS);
-            scheduleBrain(brain, gameTime, WorkPriority.CRITICAL);
         });
     }
 
     public void tick() {
         long gameTime = currentGameTime();
-        if (PerformanceConfig.aiScheduler.get()) scheduler.tick(gameTime);
-        else runUnscheduled(gameTime);
-
+        // Only explicitly queued Performance-mod work runs here. Native Recruits goals,
+        // navigation, move controls, attributes, and entity ticks are never throttled.
+        scheduler.tick(gameTime);
         if (gameTime - lastAudit >= PerformanceConfig.registryAuditIntervalTicks.get()) {
             registry.audit();
             lastAudit = gameTime;
@@ -82,31 +79,6 @@ public final class ServerRuntime {
     public RecruitRuntimeRegistry registry() { return registry; }
     public RecruitAIScheduler scheduler() { return scheduler; }
     public PerformanceMetrics metrics() { return metrics; }
-
-    private void scheduleBrain(RecruitRuntimeBrain brain, long due, WorkPriority priority) {
-        if (!PerformanceConfig.newBrain.get() || !brain.loaded()) return;
-        RecruitRuntimeBrain.ScheduleTicket ticket = brain.requestSchedule(due);
-        if (ticket == null) return;
-        WorkType type = brain.workType();
-        scheduler.schedule(new ScheduledWork() {
-            @Override public long dueGameTime() { return due; }
-            @Override public WorkPriority priority() { return priority; }
-            @Override public WorkType type() { return type; }
-            @Override public void run(long gameTime) {
-                if (!brain.acceptSchedule(ticket)) return;
-                if (brain.observe(gameTime, metrics)) {
-                    registry.refreshIndexes(brain);
-                    scheduleBrain(brain, gameTime + brain.nextInterval(), brain.priority());
-                }
-            }
-        });
-    }
-
-    private void runUnscheduled(long gameTime) {
-        for (RecruitRuntimeBrain brain : List.copyOf(registry.all())) {
-            if (brain.observe(gameTime, metrics)) registry.refreshIndexes(brain);
-        }
-    }
 
     private long currentGameTime() { return server.overworld() == null ? 0L : server.overworld().getGameTime(); }
 

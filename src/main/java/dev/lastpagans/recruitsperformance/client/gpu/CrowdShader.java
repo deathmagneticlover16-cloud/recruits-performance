@@ -69,13 +69,8 @@ public final class CrowdShader implements AutoCloseable {
             out float vFogDistance;
             out float vHurt;
 
-            mat3 rotX(float a) { float c=cos(a), s=sin(a); return mat3(1,0,0, 0,c,s, 0,-s,c); }
             mat3 rotY(float a) { float c=cos(a), s=sin(a); return mat3(c,0,-s, 0,1,0, s,0,c); }
             mat3 rotZ(float a) { float c=cos(a), s=sin(a); return mat3(c,s,0, -s,c,0, 0,0,1); }
-
-            vec3 pivot(int bone) {
-                return vec3(-aBindPivot.x, -aBindPivot.y + 1.5, aBindPivot.z);
-            }
 
             bool exactPose(int bone) {
                 int pose = int(floor(iPoseIndex + 0.5));
@@ -94,36 +89,6 @@ public final class CrowdShader implements AutoCloseable {
                 normal = skin * normal;
             }
 
-            mat3 proceduralRotation(int bone) {
-                if (uAnimationEnabled < 0.5) return mat3(1.0);
-                float walk = sin(iPhase * (iAnimation == 2.0 ? 0.75 : 0.55));
-                if (iAnimation == 1.0 || iAnimation == 2.0) {
-                    float amount = iAnimation == 2.0 ? 0.95 : 0.62;
-                    if (bone == 2 || bone == 5) return rotX(walk * amount);
-                    if (bone == 3 || bone == 4) return rotX(-walk * amount);
-                }
-                if (iAnimation == 3.0 && bone == 2) return rotX(-1.85 + 0.45 * sin(iPhase * 1.7));
-                if (iAnimation == 4.0 && bone == 3) return rotX(-1.05) * rotY(-0.65);
-                if (iAnimation == 5.0) {
-                    if (bone == 2) return rotX(-1.45) * rotY(-0.35);
-                    if (bone == 3) return rotX(-1.45) * rotY(0.35);
-                }
-                if (iAnimation == 6.0) {
-                    if (bone == 2) return rotX(-1.30) * rotY(-0.18);
-                    if (bone == 3) return rotX(-1.30) * rotY(0.55);
-                }
-                if (iAnimation == 7.0 && (bone == 1 || bone == 0)) return rotX(-0.18 * sin(iPhase * 2.4));
-                if (iAnimation == 9.0) {
-                    float progress = clamp(iPhase / 8.0, 0.0, 1.0);
-                    float strike = sin(progress * 3.1415926);
-                    float sweep = sin(progress * 6.2831853);
-                    if (bone == 1) return rotY(-0.24 * sweep);
-                    if (bone == 2) return rotX(-2.35 * strike) * rotY(-0.42 * sweep);
-                    if (bone == 3) return rotX(-0.32 * strike) * rotY(0.16 * sweep);
-                }
-                return mat3(1.0);
-            }
-
             void main() {
                 int bone = int(aBone + 0.5);
                 vec3 modelPosition = aPosition;
@@ -134,10 +99,6 @@ public final class CrowdShader implements AutoCloseable {
                 }
                 vec3 p = vec3(-modelPosition.x, -modelPosition.y + 1.5, modelPosition.z);
                 vec3 n = vec3(-modelNormal.x, -modelNormal.y, modelNormal.z);
-                mat3 boneMatrix = exact ? mat3(1.0) : proceduralRotation(bone);
-                vec3 bindJoint = pivot(bone);
-                p = bindJoint + boneMatrix * (p - bindJoint);
-                n = boneMatrix * n;
                 p *= iScale;
                 if (iAnimation == 8.0) {
                     float death = clamp(sqrt(max(((iPhase - 1.0) / 20.0) * 1.6, 0.0)), 0.0, 1.0);

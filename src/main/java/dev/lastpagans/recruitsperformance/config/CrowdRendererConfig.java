@@ -10,7 +10,6 @@ public final class CrowdRendererConfig {
     public static final ForgeConfigSpec.BooleanValue diagnostics;
     public static final ForgeConfigSpec.IntValue maximumInstances;
     public static final ForgeConfigSpec.DoubleValue renderDistance;
-    public static final ForgeConfigSpec.DoubleValue exactPoseDistance;
     public static final ForgeConfigSpec.DoubleValue geometryLodDistance;
     public static final ForgeConfigSpec.DoubleValue cruorStainDistance;
     public static final ForgeConfigSpec.IntValue meshCacheMegabytes;
@@ -28,8 +27,6 @@ public final class CrowdRendererConfig {
                 .defineInRange("maximumInstances", 8192, 128, 32768);
         renderDistance = builder.comment("Maximum crowd-render distance in blocks.")
                 .defineInRange("renderDistance", 384.0, 32.0, 2048.0);
-        exactPoseDistance = builder.comment("Small near-field distance for per-recruit source-model pose evaluation; farther recruits use shared cached GPU animation states.")
-                .defineInRange("exactPoseDistance", 5.0, 0.0, 5.0);
         geometryLodDistance = builder.comment("Distance where secondary body and equipment geometry is omitted while armor and the core silhouette remain.")
                 .defineInRange("geometryLodDistance", 160.0, 32.0, 1024.0);
         cruorStainDistance = builder.comment("Maximum distance for unique Cruor weapon-stain material passes; farther weapons retain their shared base material.")
