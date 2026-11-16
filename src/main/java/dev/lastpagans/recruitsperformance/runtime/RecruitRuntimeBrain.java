@@ -40,11 +40,6 @@ public final class RecruitRuntimeBrain {
     private UUID formationId;
     private int formationSlotIndex = -1;
     private UUID assignedTarget;
-    private UUID rememberedTarget;
-    private Vec3 lastKnownTargetPosition;
-    private long targetLostGameTime = Long.MIN_VALUE;
-    private long lastTargetMemoryCheckGameTime = Long.MIN_VALUE;
-    private long lastTargetMemoryPursuitGameTime = Long.MIN_VALUE;
     private Vec3 desiredSlotPosition;
     private Vec3 desiredSlotVelocity = Vec3.ZERO;
     private Vec3 lastPosition;
@@ -168,43 +163,6 @@ public final class RecruitRuntimeBrain {
 
     public void markDirty(EnumSet<DirtyFlag> flags) { dirtyFlags.addAll(flags); }
 
-    public boolean beginOrRetainTargetMemory(LivingEntity target, long gameTime) {
-        if (target == null || !target.isAlive()) return false;
-        if (!target.getUUID().equals(rememberedTarget)) {
-            rememberedTarget = target.getUUID();
-            lastKnownTargetPosition = target.position();
-            targetLostGameTime = gameTime;
-            lastTargetMemoryCheckGameTime = Long.MIN_VALUE;
-            lastTargetMemoryPursuitGameTime = Long.MIN_VALUE;
-            markDirty(EnumSet.of(DirtyFlag.TARGET_DIRTY, DirtyFlag.NAVIGATION_DIRTY));
-        }
-        return gameTime - targetLostGameTime <= PerformanceConfig.targetMemoryTicks.get();
-    }
-
-    public void clearTargetMemory() {
-        rememberedTarget = null;
-        lastKnownTargetPosition = null;
-        targetLostGameTime = Long.MIN_VALUE;
-        lastTargetMemoryCheckGameTime = Long.MIN_VALUE;
-        lastTargetMemoryPursuitGameTime = Long.MIN_VALUE;
-    }
-
-    public boolean targetMemoryActive() { return rememberedTarget != null && lastKnownTargetPosition != null; }
-    public boolean targetMemoryExpired(long gameTime) {
-        return !targetMemoryActive() || gameTime - targetLostGameTime > PerformanceConfig.targetMemoryTicks.get();
-    }
-    public boolean targetMemoryCheckDue(long gameTime) {
-        return gameTime - lastTargetMemoryCheckGameTime >= PerformanceConfig.targetMemoryCheckInterval.get();
-    }
-    public void markTargetMemoryChecked(long gameTime) { lastTargetMemoryCheckGameTime = gameTime; }
-    public boolean targetMemoryPursuitDue(long gameTime) {
-        return gameTime - lastTargetMemoryPursuitGameTime >= PerformanceConfig.targetMemoryRepathInterval.get();
-    }
-    public void markTargetMemoryPursuit(long gameTime) { lastTargetMemoryPursuitGameTime = gameTime; }
-    public boolean permitsTargetMemoryPursuit() {
-        return orderState == OrderState.IDLE || orderState == OrderState.PROTECT || orderState == OrderState.PATROL;
-    }
-
     public ScheduleTicket requestSchedule(long dueGameTime) {
         if (dueGameTime >= scheduledDue) return null;
         scheduledDue = dueGameTime;
@@ -253,8 +211,6 @@ public final class RecruitRuntimeBrain {
     public Vec3 desiredSlotPosition() { return desiredSlotPosition; }
     public Vec3 desiredSlotVelocity() { return desiredSlotVelocity; }
     public int formationSlotIndex() { return formationSlotIndex; }
-    public UUID rememberedTarget() { return rememberedTarget; }
-    public Vec3 lastKnownTargetPosition() { return lastKnownTargetPosition; }
     public OrderState orderState() { return orderState; }
     public LivingEntity entityOrNull() { return entity.get(); }
 

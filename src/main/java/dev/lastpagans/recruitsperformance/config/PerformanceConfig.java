@@ -15,8 +15,6 @@ public final class PerformanceConfig {
     public static ForgeConfigSpec.BooleanValue navigationDeduplication;
     public static ForgeConfigSpec.BooleanValue customTacticalNavigation;
     public static ForgeConfigSpec.BooleanValue networkLod;
-    public static ForgeConfigSpec.BooleanValue targetMemory;
-    public static ForgeConfigSpec.BooleanValue targetMemoryPursuit;
     public static ForgeConfigSpec.BooleanValue formationApi;
 
     public static ForgeConfigSpec.BooleanValue debugLogSummary;
@@ -32,13 +30,6 @@ public final class PerformanceConfig {
     public static ForgeConfigSpec.DoubleValue warmPlayerDistance;
     public static ForgeConfigSpec.DoubleValue coldPlayerDistance;
     public static ForgeConfigSpec.IntValue urgentWakeHotTicks;
-
-    public static ForgeConfigSpec.IntValue targetMemoryTicks;
-    public static ForgeConfigSpec.DoubleValue targetMemoryMaxDistance;
-    public static ForgeConfigSpec.IntValue targetMemoryCheckInterval;
-    public static ForgeConfigSpec.IntValue targetMemoryRepathInterval;
-    public static ForgeConfigSpec.DoubleValue targetMemoryArrivalDistance;
-    public static ForgeConfigSpec.DoubleValue targetMemoryPursuitSpeed;
 
     public static ForgeConfigSpec.IntValue criticalBudget;
     public static ForgeConfigSpec.IntValue highBudget;
@@ -65,8 +56,6 @@ public final class PerformanceConfig {
         navigationDeduplication = future(b, "navigationDeduplication");
         customTacticalNavigation = future(b, "customTacticalNavigation");
         networkLod = future(b, "networkLod");
-        targetMemory = b.comment("Keep a valid combat target briefly after line of sight is lost.").define("targetMemory", true);
-        targetMemoryPursuit = b.comment("Allow eligible recruits to investigate the target's last-known position.").define("targetMemoryPursuit", true);
         formationApi = b.comment("Expose deterministic formation geometry and stable slot-assignment helpers to RTS addons.").define("formationApi", true);
         b.pop();
 
@@ -86,15 +75,6 @@ public final class PerformanceConfig {
         warmPlayerDistance = b.defineInRange("warmPlayerDistance", 96.0, 8.0, 1024.0);
         coldPlayerDistance = b.defineInRange("coldPlayerDistance", 192.0, 16.0, 2048.0);
         urgentWakeHotTicks = b.comment("How long damage, commands, and emergencies force HOT simulation. LOAD does not force HOT.").defineInRange("urgentWakeHotTicks", 40, 0, 1200);
-        b.pop();
-
-        b.push("targetMemory");
-        targetMemoryTicks = b.comment("Maximum ticks to remember a target after losing line of sight.").defineInRange("memoryTicks", 100, 1, 1200);
-        targetMemoryMaxDistance = b.comment("Forget remembered targets beyond this distance.").defineInRange("maxDistance", 96.0, 8.0, 512.0);
-        targetMemoryCheckInterval = b.comment("Ticks between visibility and validity checks while remembering a target.").defineInRange("checkIntervalTicks", 5, 1, 100);
-        targetMemoryRepathInterval = b.comment("Minimum ticks between pursuit navigation requests.").defineInRange("repathIntervalTicks", 20, 2, 200);
-        targetMemoryArrivalDistance = b.comment("Stop pursuing after reaching this distance from the last-known position.").defineInRange("arrivalDistance", 2.5, 0.5, 16.0);
-        targetMemoryPursuitSpeed = b.comment("Navigation speed used while investigating the last-known position.").defineInRange("pursuitSpeed", 1.0, 0.1, 2.0);
         b.pop();
 
         b.push("scheduler");

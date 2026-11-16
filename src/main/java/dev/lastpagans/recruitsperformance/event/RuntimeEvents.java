@@ -7,13 +7,11 @@ import dev.lastpagans.recruitsperformance.runtime.RecruitIntrospector;
 import dev.lastpagans.recruitsperformance.runtime.ServerRuntime;
 import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.EntityLeaveLevelEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
-import net.minecraftforge.event.entity.living.LivingChangeTargetEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.event.TickEvent;
@@ -51,15 +49,6 @@ public final class RuntimeEvents {
         runtime.onDamage(entity.getUUID(), projectile, entity.level().getGameTime());
         if (event.getSource().is(DamageTypeTags.IS_FIRE)) runtime.wake(entity.getUUID(), WakeReason.FIRE);
         if (event.getSource().is(DamageTypeTags.IS_EXPLOSION)) runtime.wake(entity.getUUID(), WakeReason.EXPLOSION);
-    }
-
-    @SubscribeEvent
-    public static void onTargetChange(LivingChangeTargetEvent event) {
-        if (!(event.getEntity() instanceof Mob recruit) || recruit.level().isClientSide()
-                || !RecruitIntrospector.isRecruit(recruit)) return;
-        LivingEntity replacement = ServerRuntime.get(recruit.getServer()).targetMemory().onTargetChange(
-                recruit, event.getOriginalTarget(), event.getNewTarget(), recruit.level().getGameTime());
-        if (replacement != event.getNewTarget()) event.setNewTarget(replacement);
     }
 
     @SubscribeEvent

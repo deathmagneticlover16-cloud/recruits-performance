@@ -7,11 +7,11 @@ public final class CrowdRendererConfig {
 
     public static final ForgeConfigSpec.BooleanValue enabled;
     public static final ForgeConfigSpec.BooleanValue gpuAnimation;
-    public static final ForgeConfigSpec.BooleanValue optimizedShadows;
     public static final ForgeConfigSpec.BooleanValue diagnostics;
     public static final ForgeConfigSpec.IntValue maximumInstances;
     public static final ForgeConfigSpec.DoubleValue renderDistance;
     public static final ForgeConfigSpec.DoubleValue exactPoseDistance;
+    public static final ForgeConfigSpec.DoubleValue geometryLodDistance;
     public static final ForgeConfigSpec.IntValue meshCacheMegabytes;
 
     static {
@@ -21,8 +21,6 @@ public final class CrowdRendererConfig {
                 .define("enabled", true);
         gpuAnimation = builder.comment("Evaluate shared skeletal animation in the vertex shader.")
                 .define("gpuAnimation", true);
-        optimizedShadows = builder.comment("Suppress the legacy per-entity blob-shadow pass for converted recruits.")
-                .define("optimizedShadows", true);
         diagnostics = builder.comment("Show crowd-renderer counters in the debug overlay.")
                 .define("diagnostics", false);
         maximumInstances = builder.comment("Hard safety limit for visible virtual soldiers.")
@@ -31,6 +29,8 @@ public final class CrowdRendererConfig {
                 .defineInRange("renderDistance", 384.0, 32.0, 2048.0);
         exactPoseDistance = builder.comment("Distance for exact source-model pose capture; farther recruits use shared GPU animation states.")
                 .defineInRange("exactPoseDistance", 96.0, 0.0, 512.0);
+        geometryLodDistance = builder.comment("Distance where secondary body and equipment geometry is omitted while armor and the core silhouette remain.")
+                .defineInRange("geometryLodDistance", 160.0, 32.0, 1024.0);
         meshCacheMegabytes = builder.comment("Approximate GPU mesh-cache budget.")
                 .defineInRange("meshCacheMegabytes", 384, 64, 2048);
         builder.pop();

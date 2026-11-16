@@ -21,11 +21,13 @@ public record InstanceData(
         float z = (float) Mth.lerp(partialTick, entity.zOld, entity.getZ());
         float yaw = Mth.PI - Mth.lerp(partialTick, entity.yBodyRotO, entity.yBodyRot) * Mth.DEG_TO_RAD;
         CrowdAnimation animation = CrowdAnimation.select(entity);
-        float phase = entity.tickCount + partialTick + (entity.getId() * 0.6180339F % 1.0F) * 20.0F;
+        float phase = animation == CrowdAnimation.DEATH
+                ? entity.deathTime + partialTick
+                : entity.tickCount + partialTick + (entity.getId() * 0.6180339F % 1.0F) * 20.0F;
         float red = 1.0F;
         float green = 1.0F;
         float blue = 1.0F;
-        if (entity.hurtTime > 0) {
+        if (entity.hurtTime > 0 && !entity.isDeadOrDying()) {
             green *= 0.35F;
             blue *= 0.35F;
         }

@@ -49,14 +49,25 @@ public final class CrowdShader implements AutoCloseable {
                 return vec3(-aBindPivot.x, -aBindPivot.y + 1.5, aBindPivot.z);
             }
 
-            mat3 boneRotation(int bone) {
-                if (uAnimationEnabled < 0.5) return mat3(1.0);
+            bool exactPose(int bone) {
                 int pose = int(floor(iPoseIndex + 0.5));
-                if (pose >= 0 && pose < uPoseCount) {
-                    int texel = pose * 12 + bone * 2;
-                    vec3 angles = texelFetch(uPoseBuffer, texel).xyz;
-                    return rotZ(angles.z) * rotY(-angles.y) * rotX(-angles.x);
-                }
+                return uAnimationEnabled >= 0.5 && pose >= 0 && pose < uPoseCount && bone >= 0 && bone < 16;
+            }
+
+            void applyExactPose(int bone, inout vec3 position, inout vec3 normal) {
+                int pose = int(floor(iPoseIndex + 0.5));
+                int texel = pose * 64 + bone * 4;
+                vec3 c0 = texelFetch(uPoseBuffer, texel).xyz;
+                vec3 c1 = texelFetch(uPoseBuffer, texel + 1).xyz;
+                vec3 c2 = texelFetch(uPoseBuffer, texel + 2).xyz;
+                vec3 translation = texelFetch(uPoseBuffer, texel + 3).xyz;
+                mat3 skin = mat3(c0, c1, c2);
+                position = skin * position + translation;
+                normal = skin * normal;
+            }
+
+            mat3 proceduralRotation(int bone) {
+                if (uAnimationEnabled < 0.5) return mat3(1.0);
                 float walk = sin(iPhase * (iAnimation == 2.0 ? 0.75 : 0.55));
                 if (iAnimation == 1.0 || iAnimation == 2.0) {
                     float amount = iAnimation == 2.0 ? 0.95 : 0.62;
@@ -79,20 +90,23 @@ public final class CrowdShader implements AutoCloseable {
 
             void main() {
                 int bone = int(aBone + 0.5);
-                vec3 p = vec3(-aPosition.x, -aPosition.y + 1.5, aPosition.z);
-                vec3 n = vec3(-aNormal.x, -aNormal.y, aNormal.z);
-                vec3 joint = pivot(bone);
-                int pose = int(floor(iPoseIndex + 0.5));
-                if (uAnimationEnabled >= 0.5 && pose >= 0 && pose < uPoseCount) {
-                    vec3 posePivot = texelFetch(uPoseBuffer, pose * 12 + bone * 2 + 1).xyz;
-                    joint = vec3(-posePivot.x, -posePivot.y + 1.5, posePivot.z);
+                vec3 modelPosition = aPosition;
+                vec3 modelNormal = aNormal;
+                bool exact = exactPose(bone);
+                if (exact) {
+                    applyExactPose(bone, modelPosition, modelNormal);
                 }
-                mat3 boneMatrix = boneRotation(bone);
+                vec3 p = vec3(-modelPosition.x, -modelPosition.y + 1.5, modelPosition.z);
+                vec3 n = vec3(-modelNormal.x, -modelNormal.y, modelNormal.z);
+                mat3 boneMatrix = exact ? mat3(1.0) : proceduralRotation(bone);
                 vec3 bindJoint = pivot(bone);
-                p = joint + boneMatrix * (p - bindJoint);
+                p = bindJoint + boneMatrix * (p - bindJoint);
                 n = boneMatrix * n;
                 p *= iScale;
-                if (iAnimation == 8.0) p = rotZ(1.35) * (p - vec3(0.0, 0.9, 0.0)) + vec3(0.0, 0.45, 0.0);
+                if (iAnimation == 8.0) {
+                    float death = clamp(sqrt(max(((iPhase - 1.0) / 20.0) * 1.6, 0.0)), 0.0, 1.0);
+                    p = rotZ(death * 1.5707963) * p;
+                }
                 mat3 facing = rotY(iYaw);
                 vec3 world = iPosition + facing * p;
                 vec4 viewPosition = uView * vec4(world - uCamera, 1.0);

@@ -18,7 +18,6 @@ public final class ServerRuntime {
     private final PerformanceMetrics metrics = new PerformanceMetrics();
     private final RecruitRuntimeRegistry registry = new RecruitRuntimeRegistry(metrics);
     private final RecruitAIScheduler scheduler = new RecruitAIScheduler(metrics);
-    private final TargetMemoryController targetMemory = new TargetMemoryController(this, metrics);
     private long lastAudit;
     private long lastLog;
 
@@ -43,7 +42,6 @@ public final class ServerRuntime {
     }
 
     public void onRecruitUnloaded(UUID recruitId, boolean died) {
-        targetMemory.remove(recruitId);
         registry.unregister(recruitId, died);
     }
 
@@ -70,7 +68,6 @@ public final class ServerRuntime {
         long gameTime = currentGameTime();
         if (PerformanceConfig.aiScheduler.get()) scheduler.tick(gameTime);
         else runUnscheduled(gameTime);
-        targetMemory.tick(gameTime);
 
         if (gameTime - lastAudit >= PerformanceConfig.registryAuditIntervalTicks.get()) {
             registry.audit();
@@ -85,7 +82,6 @@ public final class ServerRuntime {
     public RecruitRuntimeRegistry registry() { return registry; }
     public RecruitAIScheduler scheduler() { return scheduler; }
     public PerformanceMetrics metrics() { return metrics; }
-    public TargetMemoryController targetMemory() { return targetMemory; }
 
     private void scheduleBrain(RecruitRuntimeBrain brain, long due, WorkPriority priority) {
         if (!PerformanceConfig.newBrain.get() || !brain.loaded()) return;
@@ -116,7 +112,6 @@ public final class ServerRuntime {
 
     private void close() {
         scheduler.clear();
-        targetMemory.clear();
         registry.clear();
     }
 }

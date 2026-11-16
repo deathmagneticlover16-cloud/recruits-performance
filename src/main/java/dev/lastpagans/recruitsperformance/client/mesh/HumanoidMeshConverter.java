@@ -20,13 +20,17 @@ public final class HumanoidMeshConverter {
     private HumanoidMeshConverter() {}
 
     public static MeshData convert(HumanoidModel<?> model) {
+        return convert(model, true);
+    }
+
+    public static MeshData convert(HumanoidModel<?> model, boolean fullDetail) {
         MeshData.Builder builder = new MeshData.Builder();
         CaptureVertexConsumer consumer = new CaptureVertexConsumer(builder);
         List<SavedPose> poses = save(model);
         try {
-            poses.forEach(saved -> zeroRotation(saved.part));
+            poses.forEach(saved -> saved.part.loadPose(saved.part.getInitialPose()));
             capture(model.head, HEAD, consumer);
-            capture(model.hat, HEAD, consumer);
+            if (fullDetail) capture(model.hat, HEAD, consumer);
             capture(model.body, BODY, consumer);
             capture(model.rightArm, RIGHT_ARM, consumer);
             capture(model.leftArm, LEFT_ARM, consumer);
@@ -55,12 +59,6 @@ public final class HumanoidMeshConverter {
         poses.add(new SavedPose(model.rightLeg, model.rightLeg.storePose()));
         poses.add(new SavedPose(model.leftLeg, model.leftLeg.storePose()));
         return poses;
-    }
-
-    private static void zeroRotation(ModelPart part) {
-        part.xRot = 0.0F;
-        part.yRot = 0.0F;
-        part.zRot = 0.0F;
     }
 
     private record SavedPose(ModelPart part, PartPose pose) {}

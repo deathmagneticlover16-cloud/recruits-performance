@@ -2,6 +2,7 @@ package dev.lastpagans.recruitsperformance.client.event;
 
 import dev.lastpagans.recruitsperformance.RecruitsPerformance;
 import dev.lastpagans.recruitsperformance.client.diagnostics.CrowdDiagnostics;
+import dev.lastpagans.recruitsperformance.client.compat.IcysHorsesCompat;
 import dev.lastpagans.recruitsperformance.client.render.CrowdRenderer;
 import dev.lastpagans.recruitsperformance.config.CrowdRendererConfig;
 import dev.lastpagans.recruitsperformance.runtime.RecruitIntrospector;
@@ -29,7 +30,8 @@ public final class CrowdRenderEvents {
         @SubscribeEvent(priority = EventPriority.LOWEST, receiveCanceled = true)
         public static void beforeLiving(RenderLivingEvent.Pre<?, ?> event) {
             LivingEntity entity = event.getEntity();
-            if (event.isCanceled() || !RecruitIntrospector.isRecruit(entity)) return;
+            if (event.isCanceled() || (!RecruitIntrospector.isRecruit(entity)
+                    && !IcysHorsesCompat.isMountedRecruitHorse(entity))) return;
             if (CrowdRenderer.get().submit(entity, event.getRenderer(), event.getPartialTick(), event.getPackedLight())) {
                 event.setCanceled(true);
             }

@@ -1,3 +1,14 @@
+# 1.0.0 Alpha 2
+
+- Replaced the six-Euler pose palette with sixteen 3x4 skin matrices for exact close-range hierarchy animation.
+- Added Icy's Better Horses 2.1.6 mounted-recruit instancing for body and tack models, with correctness fallbacks for dynamic GeckoLib stabilizers, banners and optional horns.
+- Added Epic Knights and addon `ArmorDecoration` model layers, dyes, overlays, surcoats and heraldry material passes.
+- Restored ordinary entity ground shadows, source-style progressive death rotation and world nameplates.
+- Added a long-range geometry LOD while retaining body and armor silhouettes.
+- Added correctness fallbacks for glowing entities, foil/glint equipment, custom heads and Cruor's transient bloodied-gear material pass.
+- Fixed Cruor weapon blood captures being merged into the block atlas and displaying unrelated atlas sprites.
+- Removed the target-memory controller, pursuit navigation, configuration, commands, metrics and dormant runtime state.
+
 # 1.0.0 Alpha 1
 
 - Replaced supported Recruits living-entity rendering with a dedicated instanced crowd pass.

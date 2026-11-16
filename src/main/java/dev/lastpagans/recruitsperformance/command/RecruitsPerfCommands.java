@@ -28,7 +28,6 @@ public final class RecruitsPerfCommands {
                 .then(Commands.literal("dump").executes(RecruitsPerfCommands::dump))
                 .then(Commands.literal("scheduler").executes(RecruitsPerfCommands::scheduler))
                 .then(Commands.literal("ai").executes(RecruitsPerfCommands::ai))
-                .then(Commands.literal("targetmemory").executes(RecruitsPerfCommands::targetMemory))
                 .then(Commands.literal("navigation").executes(RecruitsPerfCommands::navigation))
                 .then(Commands.literal("rendering").executes(RecruitsPerfCommands::rendering))
                 .then(Commands.literal("features").executes(RecruitsPerfCommands::features)));
@@ -51,7 +50,6 @@ public final class RecruitsPerfCommands {
         send(context, "--- Recruits Performance dump ---");
         stats(context);
         ai(context);
-        targetMemory(context);
         scheduler(context);
         navigation(context);
         rendering(context);
@@ -91,18 +89,6 @@ public final class RecruitsPerfCommands {
         return registry.size();
     }
 
-    private static int targetMemory(CommandContext<CommandSourceStack> context) {
-        ServerRuntime runtime = ServerRuntime.get(context.getSource().getServer());
-        PerformanceMetrics m = runtime.metrics();
-        send(context, "targetMemory active=" + runtime.targetMemory().activeCount()
-                + " started=" + m.get(Metric.TARGET_MEMORY_STARTED)
-                + " retainedClears=" + m.get(Metric.TARGET_MEMORY_RETENTIONS)
-                + " reacquired=" + m.get(Metric.TARGET_MEMORY_REACQUIRED)
-                + " expired=" + m.get(Metric.TARGET_MEMORY_EXPIRED)
-                + " pursuitCommands=" + m.get(Metric.TARGET_MEMORY_PURSUIT_COMMANDS));
-        return runtime.targetMemory().activeCount();
-    }
-
     private static int navigation(CommandContext<CommandSourceStack> context) {
         PerformanceMetrics m = ServerRuntime.get(context.getSource().getServer()).metrics();
         send(context, "navigation requests=" + m.get(Metric.PATH_REQUESTS)
@@ -110,8 +96,7 @@ public final class RecruitsPerfCommands {
                 + " duplicates=" + m.get(Metric.DUPLICATE_ROUTE_REQUESTS)
                 + " failures=" + m.get(Metric.PATH_FAILURES)
                 + " localRecovery=" + m.get(Metric.LOCAL_RECOVERY_EVENTS)
-                + " fullRecovery=" + m.get(Metric.FULL_RECOVERY_PATHS)
-                + " targetMemoryPursuit=" + m.get(Metric.TARGET_MEMORY_PURSUIT_COMMANDS));
+                + " fullRecovery=" + m.get(Metric.FULL_RECOVERY_PATHS));
         return 1;
     }
 
@@ -130,9 +115,7 @@ public final class RecruitsPerfCommands {
                 + " steering=" + PerformanceConfig.localSteering.get()
                 + " navDedup=" + PerformanceConfig.navigationDeduplication.get()
                 + " networkLOD=" + PerformanceConfig.networkLod.get());
-        send(context, "features targetMemory=" + PerformanceConfig.targetMemory.get()
-                + " memoryPursuit=" + PerformanceConfig.targetMemoryPursuit.get()
-                + " formationAPI=" + PerformanceConfig.formationApi.get());
+        send(context, "features formationAPI=" + PerformanceConfig.formationApi.get());
         return 1;
     }
 

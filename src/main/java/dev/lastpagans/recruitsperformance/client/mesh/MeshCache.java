@@ -1,14 +1,20 @@
 package dev.lastpagans.recruitsperformance.client.mesh;
 
 import dev.lastpagans.recruitsperformance.client.gpu.GpuMesh;
+import dev.lastpagans.recruitsperformance.client.compat.CruorCompat;
 import dev.lastpagans.recruitsperformance.client.scene.MeshKey;
 import dev.lastpagans.recruitsperformance.config.CrowdRendererConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelLayers;
+import net.minecraft.client.model.geom.ModelLayerLocation;
 import net.minecraft.client.renderer.Sheets;
 import net.minecraft.client.renderer.texture.TextureAtlas;
+import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.HumanoidArm;
@@ -18,8 +24,12 @@ import net.minecraft.world.item.DyeableLeatherItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ShieldItem;
 import net.minecraft.world.item.CrossbowItem;
+import net.minecraft.world.item.DyeColor;
+import net.minecraft.world.level.block.entity.BannerBlockEntity;
+import net.minecraft.world.level.block.entity.BannerPattern;
 import net.minecraftforge.client.ForgeHooksClient;
 import net.minecraftforge.client.extensions.common.IClientItemExtensions;
+import com.mojang.datafixers.util.Pair;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -35,27 +45,37 @@ public final class MeshCache implements AutoCloseable {
     private HumanoidModel<LivingEntity> innerArmor;
     private HumanoidModel<LivingEntity> outerArmor;
 
-    public MeshHandle body(HumanoidModel<?> model, ResourceLocation texture) {
-        String geometry = model.getClass().getName();
+    public MeshHandle body(HumanoidModel<?> model, ResourceLocation texture, boolean fullDetail) {
+        String geometry = model.getClass().getName() + (fullDetail ? ":full" : ":lod");
         MeshKey key = new MeshKey(geometry, texture, -1, MeshKey.Kind.BODY);
-        return handle(key, geometry, texture, 0xFFFFFFFF, false, () -> HumanoidMeshConverter.convert(model));
+        return handle(key, geometry, texture, 0xFFFFFFFF, false,
+                () -> HumanoidMeshConverter.convert(model, fullDetail));
     }
 
-    public MeshHandle bodyLayer(HumanoidModel<?> model, ResourceLocation texture) {
-        return body(model, texture);
+    public MeshHandle bodyLayer(HumanoidModel<?> model, ResourceLocation texture, boolean fullDetail) {
+        return body(model, texture, fullDetail);
     }
 
-    public List<MeshHandle> equipment(LivingEntity entity, HumanoidModel<?> bodyModel) {
+    public MeshHandle horse(Object model, ResourceLocation texture, int tint, MeshKey.Kind kind) {
+        String geometry = "icy-horse:" + kind + ":" + model.getClass().getName() + ":"
+                + Integer.toHexString(System.identityHashCode(model));
+        MeshKey key = new MeshKey(geometry, texture, -1, kind);
+        return handle(key, geometry, texture, tint, kind == MeshKey.Kind.HORSE_TACK,
+                () -> HorseModelAdapter.convert(model));
+    }
+
+    public List<MeshHandle> equipment(LivingEntity entity, HumanoidModel<?> bodyModel, boolean fullDetail) {
         ItemStack head = entity.getItemBySlot(EquipmentSlot.HEAD);
         if (!head.isEmpty() && !(head.getItem() instanceof ArmorItem)) {
             throw new IllegalStateException("Non-armor head item requires the vanilla custom-head layer: " +
                     BuiltInRegistries.ITEM.getKey(head.getItem()));
         }
         List<MeshHandle> result = new ArrayList<>(6);
-        armor(entity, EquipmentSlot.HEAD, result);
-        armor(entity, EquipmentSlot.CHEST, result);
-        armor(entity, EquipmentSlot.LEGS, result);
-        armor(entity, EquipmentSlot.FEET, result);
+        armor(entity, EquipmentSlot.HEAD, fullDetail, result);
+        armor(entity, EquipmentSlot.CHEST, fullDetail, result);
+        armor(entity, EquipmentSlot.LEGS, fullDetail, result);
+        armor(entity, EquipmentSlot.FEET, fullDetail, result);
+        if (!fullDetail) return result;
         boolean mainUsesLeftArm = entity.getMainArm() == HumanoidArm.LEFT;
         item(entity, entity.getMainHandItem(), mainUsesLeftArm, MeshKey.Kind.MAIN_HAND, bodyModel, result);
         item(entity, entity.getOffhandItem(), !mainUsesLeftArm, MeshKey.Kind.OFF_HAND, bodyModel, result);
@@ -94,9 +114,10 @@ public final class MeshCache implements AutoCloseable {
         outerArmor = null;
     }
 
-    private void armor(LivingEntity entity, EquipmentSlot slot, List<MeshHandle> result) {
+    private void armor(LivingEntity entity, EquipmentSlot slot, boolean includeDecorations, List<MeshHandle> result) {
         ItemStack stack = entity.getItemBySlot(slot);
         if (!(stack.getItem() instanceof ArmorItem armor)) return;
+        if (stack.hasFoil()) throw new IllegalStateException("Foil armor requires the vanilla glint pass");
         ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(stack.getItem());
         HumanoidModel<LivingEntity> fallback = defaultArmor(slot);
         HumanoidModel<?> model;
@@ -126,11 +147,16 @@ public final class MeshCache implements AutoCloseable {
             if (overlayHandle == null) throw new IllegalStateException("Armor overlay produced no geometry: " + itemId);
             result.add(overlayHandle);
         }
+        if (includeDecorations) decorations(stack, result);
     }
 
     private void item(LivingEntity entity, ItemStack stack, boolean left, MeshKey.Kind kind,
                       HumanoidModel<?> bodyModel, List<MeshHandle> result) {
         if (stack.isEmpty()) return;
+        if (stack.hasFoil()) throw new IllegalStateException("Foil item requires the vanilla glint pass");
+        if (CruorCompat.hasBlood(entity, stack)) {
+            throw new IllegalStateException("Cruor bloodied gear requires Cruor's dynamic material pass");
+        }
         ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(stack.getItem());
         ResourceLocation texture = stack.getItem() instanceof ShieldItem ? Sheets.SHIELD_SHEET : ITEM_ATLAS;
         boolean using = entity.isUsingItem() && entity.getUseItem() == stack;
@@ -157,7 +183,75 @@ public final class MeshCache implements AutoCloseable {
             meshes.put(geometry, mesh);
             if (equipment) equipmentMeshes.add(geometry);
         }
-        return new MeshHandle(key, mesh, texture, tint, equipment);
+        return new MeshHandle(key, mesh, texture, tint, equipment, key.kind() != MeshKey.Kind.DECORATION);
+    }
+
+    private void decorations(ItemStack stack, List<MeshHandle> result) {
+        CompoundTag decorationRoot = stack.getTagElement("ArmorDecoration");
+        if (decorationRoot != null) {
+            ListTag items = decorationRoot.getList("Items", Tag.TAG_COMPOUND);
+            for (int index = 0; index < items.size(); index++) {
+                CompoundTag entry = items.getCompound(index);
+                ResourceLocation location = decorationLocation(entry.getString("name"));
+                addDecoration(location, entry.getBoolean("dyeable"), entry.getInt("color"), result);
+            }
+        }
+        if (stack.getItem() instanceof ArmorItem armor && armor.getEquipmentSlot() == EquipmentSlot.CHEST
+                && net.minecraft.world.item.BlockItem.getBlockEntityData(stack) != null) {
+            addDecoration(new ResourceLocation("magistuarmory", "surcoat"), false, 0xFFFFFF, result);
+            List<Pair<Holder<BannerPattern>, DyeColor>> patterns = BannerBlockEntity.createPatterns(
+                    ShieldItem.getColor(stack), BannerBlockEntity.getItemPatterns(stack));
+            for (Pair<Holder<BannerPattern>, DyeColor> pattern : patterns) {
+                pattern.getFirst().unwrapKey().ifPresent(key ->
+                        addSurcoatPattern(key.location(), pattern.getSecond(), result));
+            }
+        }
+    }
+
+    private void addSurcoatPattern(ResourceLocation pattern, DyeColor color, List<MeshHandle> result) {
+        String geometry = "epic-decoration:magistuarmory:surcoat";
+        ResourceLocation texture = new ResourceLocation("magistuarmory",
+                "textures/models/armor/surcoat/" + pattern.getPath() + ".png");
+        MeshKey key = new MeshKey(geometry, texture, -1, MeshKey.Kind.DECORATION);
+        float[] rgb = color.getTextureDiffuseColors();
+        int tint = 0xFF000000 | ((int) (rgb[0] * 255.0F) << 16)
+                | ((int) (rgb[1] * 255.0F) << 8) | (int) (rgb[2] * 255.0F);
+        MeshHandle patternHandle = handle(key, geometry, texture, tint, true,
+                () -> { throw new IllegalStateException("Missing shared Epic Knights surcoat geometry"); });
+        result.add(patternHandle);
+    }
+
+    private void addDecoration(ResourceLocation location, boolean dyeable, int color, List<MeshHandle> result) {
+        String geometry = "epic-decoration:" + location;
+        ResourceLocation texture = decorationTexture(location, false);
+        MeshKey key = new MeshKey(geometry, texture, -1, MeshKey.Kind.DECORATION);
+        int tint = dyeable ? 0xFF000000 | color : 0xFFFFFFFF;
+        MeshHandle base = handle(key, geometry, texture, tint, true, () -> {
+            ModelLayerLocation layer = new ModelLayerLocation(location, "decorations");
+            HumanoidModel<LivingEntity> model = new HumanoidModel<>(
+                    Minecraft.getInstance().getEntityModels().bakeLayer(layer));
+            return HumanoidMeshConverter.convert(model);
+        });
+        if (base == null) throw new IllegalStateException("Epic Knights decoration produced no geometry: " + location);
+        result.add(base);
+        if (dyeable) {
+            ResourceLocation overlay = decorationTexture(location, true);
+            MeshKey overlayKey = new MeshKey(geometry, overlay, -1, MeshKey.Kind.DECORATION);
+            MeshHandle overlayHandle = handle(overlayKey, geometry, overlay, 0xFFFFFFFF, true,
+                    () -> { throw new IllegalStateException("Missing shared Epic Knights decoration geometry: " + location); });
+            result.add(overlayHandle);
+        }
+    }
+
+    private static ResourceLocation decorationLocation(String name) {
+        ResourceLocation parsed = new ResourceLocation(name);
+        return parsed.getNamespace().equals("minecraft")
+                ? new ResourceLocation("magistuarmory", parsed.getPath()) : parsed;
+    }
+
+    private static ResourceLocation decorationTexture(ResourceLocation location, boolean overlay) {
+        return new ResourceLocation(location.getNamespace(), "textures/models/armor/" + location.getPath()
+                + (overlay ? "_overlay.png" : ".png"));
     }
 
     @SuppressWarnings("unchecked")
