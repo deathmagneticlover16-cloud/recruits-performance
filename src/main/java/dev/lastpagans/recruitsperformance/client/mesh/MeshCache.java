@@ -56,12 +56,13 @@ public final class MeshCache implements AutoCloseable {
         return body(model, texture, fullDetail);
     }
 
-    public MeshHandle horse(Object model, ResourceLocation texture, int tint, MeshKey.Kind kind) {
+    public MeshHandle horse(Object model, ResourceLocation texture, int tint, MeshKey.Kind kind,
+                            boolean fullDetail) {
         String geometry = "icy-horse:" + kind + ":" + model.getClass().getName() + ":"
-                + Integer.toHexString(System.identityHashCode(model));
+                + Integer.toHexString(System.identityHashCode(model)) + (fullDetail ? ":full" : ":lod");
         MeshKey key = new MeshKey(geometry, texture, -1, kind);
         return handle(key, geometry, texture, tint, kind == MeshKey.Kind.HORSE_TACK,
-                () -> HorseModelAdapter.convert(model));
+                () -> HorseModelAdapter.convert(model, fullDetail));
     }
 
     public List<MeshHandle> equipment(LivingEntity entity, HumanoidModel<?> bodyModel, boolean fullDetail) {

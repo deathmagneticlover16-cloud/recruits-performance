@@ -32,7 +32,7 @@ public final class HorseModelAdapter {
         return false;
     }
 
-    public static MeshData convert(Object model) {
+    public static MeshData convert(Object model, boolean fullDetail) {
         ModelPart[] parts = parts(model);
         PartPose[] saved = save(parts);
         boolean[] visibility = visibility(parts);
@@ -42,6 +42,7 @@ public final class HorseModelAdapter {
             reset(parts);
             Matrix4f[] bind = globals(parts, true);
             for (int bone = 0; bone < parts.length; bone++) {
+                if (!fullDetail && isSecondaryPart(bone)) continue;
                 ModelPart part = parts[bone];
                 if (!part.visible) continue;
                 boolean[] hidden = hideStrategicChildren(parts, bone);
@@ -59,6 +60,11 @@ public final class HorseModelAdapter {
             restore(parts, saved, visibility);
         }
         return builder.buildQuads();
+    }
+
+    private static boolean isSecondaryPart(int bone) {
+        // Ears, mane/mane tip, tail, and reins are removed in the distant horse LOD.
+        return bone == 5 || bone == 6 || bone == 7 || bone == 8 || bone == 9 || bone == 14 || bone == 15;
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})

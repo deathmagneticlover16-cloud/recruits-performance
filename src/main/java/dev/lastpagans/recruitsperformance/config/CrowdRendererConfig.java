@@ -10,6 +10,7 @@ public final class CrowdRendererConfig {
     public static final ForgeConfigSpec.BooleanValue diagnostics;
     public static final ForgeConfigSpec.IntValue maximumInstances;
     public static final ForgeConfigSpec.DoubleValue renderDistance;
+    public static final ForgeConfigSpec.DoubleValue sourceRendererDistance;
     public static final ForgeConfigSpec.DoubleValue exactPoseDistance;
     public static final ForgeConfigSpec.DoubleValue geometryLodDistance;
     public static final ForgeConfigSpec.IntValue meshCacheMegabytes;
@@ -27,6 +28,8 @@ public final class CrowdRendererConfig {
                 .defineInRange("maximumInstances", 8192, 128, 32768);
         renderDistance = builder.comment("Maximum crowd-render distance in blocks.")
                 .defineInRange("renderDistance", 384.0, 32.0, 2048.0);
+        sourceRendererDistance = builder.comment("Distance where the original entity renderer is retained for exact animations, nameplates, armor layers, and mount transforms.")
+                .defineInRange("sourceRendererDistance", 72.0, 0.0, 256.0);
         exactPoseDistance = builder.comment("Distance for exact source-model pose capture; farther recruits use shared GPU animation states.")
                 .defineInRange("exactPoseDistance", 96.0, 0.0, 512.0);
         geometryLodDistance = builder.comment("Distance where secondary body and equipment geometry is omitted while armor and the core silhouette remain.")

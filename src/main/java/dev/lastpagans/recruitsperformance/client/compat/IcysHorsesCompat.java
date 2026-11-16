@@ -31,6 +31,11 @@ public final class IcysHorsesCompat {
         return false;
     }
 
+    public static boolean isRecruitRidingIcysHorse(LivingEntity entity) {
+        Entity vehicle = entity.getVehicle();
+        return RecruitIntrospector.isRecruit(entity) && vehicle != null && isClass(vehicle, ENTITY_CLASS);
+    }
+
     public static List<Tack> tacks(LivingEntityRenderer<?, ?> renderer, LivingEntity horse) {
         if (booleanMethod(horse, "bh_hasStabilizerItem")) {
             throw new IllegalStateException("Icy horse stabilizer requires its GeckoLib renderer");

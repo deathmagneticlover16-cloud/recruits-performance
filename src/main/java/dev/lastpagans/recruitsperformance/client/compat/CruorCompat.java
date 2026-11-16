@@ -42,8 +42,12 @@ public final class CruorCompat {
             items.setAccessible(true);
             Class<?> key = Class.forName("com.raiiiden.cruor.client.body.GearBlood$Key", false,
                     CruorCompat.class.getClassLoader());
-            holder = key.getMethod("holder");
-            item = key.getMethod("item");
+            // GearBlood.Key is package-private even though its record accessors are public.
+            // Method.invoke still checks the declaring class, so make both accessors accessible.
+            holder = key.getDeclaredMethod("holder");
+            item = key.getDeclaredMethod("item");
+            holder.setAccessible(true);
+            item.setAccessible(true);
             return true;
         } catch (ReflectiveOperationException | LinkageError absent) {
             gear = null;

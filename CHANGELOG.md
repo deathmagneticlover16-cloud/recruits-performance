@@ -1,3 +1,14 @@
+# 1.0.0 Alpha 4
+
+- Restored the source renderer inside 72 blocks so vanilla nameplates, smooth Player Animator/Recruits SPA locomotion, complete armor layers and exact mount transforms render normally up close.
+- Restored vanilla hurt overlays by retaining the source renderer for every active hurt frame instead of applying an exaggerated full-model red tint.
+- Added active Better Mob Combat attack detection so attack animation layers are never replaced by the generic crowd animation.
+- Added Iris/Oculus shader-pack detection and a correctness fallback that prevents raw crowd shaders from writing invalid data into shader-pack framebuffers.
+- Fixed Cruor's package-private gear-cache reflection and rejected Cruor dynamic render types at the item-capture boundary, with an additional captured-geometry safety limit.
+- Restored the Recruits SPA Icy horse seat anchor and moved crowd interception ahead of paired render-event transform hooks.
+- Added a real distant Icy horse geometry LOD while retaining body and tack materials.
+- Removed the superseded custom nameplate path now that the exact source nameplate renderer owns the full visible label range.
+
 # 1.0.0 Alpha 3
 
 - Fixed the confirmed AMD `atio6axx.dll` access violation during `glShaderSource` on Radeon RX 570.

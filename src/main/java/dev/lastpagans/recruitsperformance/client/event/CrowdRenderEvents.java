@@ -27,7 +27,9 @@ public final class CrowdRenderEvents {
     public static final class ForgeEvents {
         private ForgeEvents() {}
 
-        @SubscribeEvent(priority = EventPriority.LOWEST, receiveCanceled = true)
+        // Run before animation/anchor Pre listeners. If one of those listeners pushes a
+        // PoseStack transform before cancellation, its matching Post listener never pops it.
+        @SubscribeEvent(priority = EventPriority.HIGHEST)
         public static void beforeLiving(RenderLivingEvent.Pre<?, ?> event) {
             LivingEntity entity = event.getEntity();
             if (event.isCanceled() || (!RecruitIntrospector.isRecruit(entity)
