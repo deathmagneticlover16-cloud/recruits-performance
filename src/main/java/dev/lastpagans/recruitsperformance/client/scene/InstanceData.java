@@ -1,5 +1,6 @@
 package dev.lastpagans.recruitsperformance.client.scene;
 
+import dev.lastpagans.recruitsperformance.client.compat.BetterCombatCompat;
 import dev.lastpagans.recruitsperformance.client.compat.IcysHorsesCompat;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.LivingEntity;
@@ -26,9 +27,14 @@ public record InstanceData(
         float z = (float) Mth.lerp(partialTick, entity.zOld, entity.getZ());
         float yaw = Mth.PI - Mth.lerp(partialTick, entity.yBodyRotO, entity.yBodyRot) * Mth.DEG_TO_RAD;
         CrowdAnimation animation = CrowdAnimation.select(entity);
-        float phase = animation == CrowdAnimation.DEATH
-                ? entity.deathTime + partialTick
-                : entity.tickCount + partialTick + (entity.getId() * 0.6180339F % 1.0F) * 20.0F;
+        float phase;
+        if (animation == CrowdAnimation.DEATH) {
+            phase = entity.deathTime + partialTick;
+        } else if (animation == CrowdAnimation.BETTER_COMBAT) {
+            phase = BetterCombatCompat.animationPhase(entity, partialTick);
+        } else {
+            phase = entity.tickCount + partialTick + (entity.getId() * 0.6180339F % 1.0F) * 20.0F;
+        }
         return new InstanceData(
                 x, y, z, yaw, phase, animation.shaderId(),
                 1.0F, 1.0F, 1.0F,

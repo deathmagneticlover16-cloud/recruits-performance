@@ -65,7 +65,8 @@ public final class MeshCache implements AutoCloseable {
                 () -> HorseModelAdapter.convert(model, fullDetail));
     }
 
-    public List<MeshHandle> equipment(LivingEntity entity, HumanoidModel<?> bodyModel, boolean fullDetail) {
+    public List<MeshHandle> equipment(LivingEntity entity, HumanoidModel<?> bodyModel, boolean fullDetail,
+                                      boolean cruorDetail) {
         ItemStack head = entity.getItemBySlot(EquipmentSlot.HEAD);
         if (!head.isEmpty() && !(head.getItem() instanceof ArmorItem)) {
             throw new IllegalStateException("Non-armor head item requires the vanilla custom-head layer: " +
@@ -78,8 +79,10 @@ public final class MeshCache implements AutoCloseable {
         armor(entity, EquipmentSlot.FEET, fullDetail, result);
         if (!fullDetail) return result;
         boolean mainUsesLeftArm = entity.getMainArm() == HumanoidArm.LEFT;
-        item(entity, entity.getMainHandItem(), mainUsesLeftArm, MeshKey.Kind.MAIN_HAND, bodyModel, result);
-        item(entity, entity.getOffhandItem(), !mainUsesLeftArm, MeshKey.Kind.OFF_HAND, bodyModel, result);
+        item(entity, entity.getMainHandItem(), mainUsesLeftArm, MeshKey.Kind.MAIN_HAND,
+                bodyModel, cruorDetail, result);
+        item(entity, entity.getOffhandItem(), !mainUsesLeftArm, MeshKey.Kind.OFF_HAND,
+                bodyModel, cruorDetail, result);
         return result;
     }
 
@@ -152,12 +155,9 @@ public final class MeshCache implements AutoCloseable {
     }
 
     private void item(LivingEntity entity, ItemStack stack, boolean left, MeshKey.Kind kind,
-                      HumanoidModel<?> bodyModel, List<MeshHandle> result) {
+                      HumanoidModel<?> bodyModel, boolean cruorDetail, List<MeshHandle> result) {
         if (stack.isEmpty()) return;
         if (stack.hasFoil()) throw new IllegalStateException("Foil item requires the vanilla glint pass");
-        if (CruorCompat.hasBlood(entity, stack)) {
-            throw new IllegalStateException("Cruor bloodied gear requires Cruor's dynamic material pass");
-        }
         ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(stack.getItem());
         ResourceLocation texture = stack.getItem() instanceof ShieldItem ? Sheets.SHIELD_SHEET : ITEM_ATLAS;
         boolean using = entity.isUsingItem() && entity.getUseItem() == stack;
@@ -168,10 +168,30 @@ public final class MeshCache implements AutoCloseable {
         MeshKey key = new MeshKey(geometry, texture,
                 left ? HumanoidMeshConverter.LEFT_ARM : HumanoidMeshConverter.RIGHT_ARM, kind);
         MeshHandle handle = handle(key, geometry, texture, 0xFFFFFFFF, true,
-                () -> ItemMeshConverter.convert(entity, stack, left,
+                () -> ItemMeshConverter.convertBase(entity, stack, left,
                         left ? bodyModel.leftArm : bodyModel.rightArm));
         if (handle == null) throw new IllegalStateException("Item model produced no geometry: " + itemId);
         result.add(handle);
+        if (!cruorDetail) return;
+        CruorCompat.Stain stain = CruorCompat.stain(entity, stack);
+        if (stain == null) return;
+        MeshData captured = null;
+        if (stain.texture() == null) {
+            captured = ItemMeshConverter.convertCruor(entity, stack, left,
+                    left ? bodyModel.leftArm : bodyModel.rightArm);
+            stain = CruorCompat.refreshStain(entity, stack);
+        }
+        if (stain == null || stain.texture() == null) return;
+        String stainGeometry = geometry + ":cruor:" + entity.getId();
+        MeshKey stainKey = new MeshKey(stainGeometry, stain.texture(),
+                left ? HumanoidMeshConverter.LEFT_ARM : HumanoidMeshConverter.RIGHT_ARM, kind);
+        MeshData precomputed = captured;
+        MeshHandle stainHandle = handle(stainKey, stainGeometry, stain.texture(), 0xFFFFFFFF, true,
+                () -> precomputed == null
+                        ? ItemMeshConverter.convertCruor(entity, stack, left,
+                        left ? bodyModel.leftArm : bodyModel.rightArm)
+                        : precomputed);
+        if (stainHandle != null) result.add(stainHandle);
     }
 
     private MeshHandle handle(MeshKey key, String geometry, ResourceLocation texture, int tint, boolean equipment,

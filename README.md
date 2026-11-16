@@ -1,10 +1,12 @@
 # Recruits Performance
 
-Recruits Performance is a Forge 1.20.1 client renderer and server performance runtime for Villager Recruits. Distant supported recruit visuals bypass `LivingEntityRenderer` after their visual state has been extracted and are drawn as shared GPU mesh instances. The exact source renderer remains active in the near field and for visual states that require mod-owned render or animation layers.
+Recruits Performance is a Forge 1.20.1 client renderer and server performance runtime for Villager Recruits. Supported recruit visuals bypass `LivingEntityRenderer` after their visual state has been extracted and are drawn as shared GPU mesh instances at every distance.
 
 The renderer converts the active Recruits humanoid `ModelPart` hierarchy into one reusable body mesh. Recruits biome, faction-cloth and companion-cloth materials reuse that same geometry as separate instanced batches. Armor is resolved through Forge's `IClientItemExtensions#getHumanoidArmorModel` hook, which is the model-format API used by Epic Knights 10.15 and compatible addons. Standard and custom humanoid armor therefore use the same automatic converter instead of an item whitelist, with dyed base and overlay materials sharing one converted geometry allocation. Main-hand and off-hand baked item geometry is captured once and attached to the animated arm bones. Dynamic equipment changes select a different cached component without rebuilding unrelated soldiers.
 
-Every body and equipment vertex carries a compact bone identifier. Beyond the configurable source-renderer distance, exact GPU poses can be uploaded as 3x4 skin matrices to a shared 16-bone pose buffer before the far field switches to shared procedural animation. Body, armor and held-item instances reference the pose by index, so they stay aligned without duplicating pose data per component. Geometry LODs omit secondary soldier and horse detail at long range while retaining their core silhouettes and material identity. Instances sharing a mesh and texture are submitted with `glDrawElementsInstanced`.
+Every body and equipment vertex carries a compact bone identifier. Exact GPU poses can be uploaded as 3x4 skin matrices to a shared 16-bone pose buffer before the far field switches to shared procedural animation. Body, armor and held-item instances reference the pose by index, so they stay aligned without duplicating pose data per component. Geometry LODs omit secondary soldier and horse detail at long range while retaining their core silhouettes and material identity. Instances sharing a mesh and texture are submitted with `glDrawElementsInstanced`.
+
+Per-recruit source-model pose evaluation is capped at five blocks. Beyond that distance, animation state and timing are cached and evaluated in the shared GPU path; this is not a vanilla-renderer boundary.
 
 ## Requirements
 
@@ -22,7 +24,7 @@ Epic Knights and Recruits RTS are optional integrations. Their conventional huma
 ./gradlew clean build
 ```
 
-The distributable JAR is written to `build/libs/recruits-performance-1.20.1-1.0.0-alpha.4.jar`. The checked-in wrapper verifies Gradle 8.5 with its official SHA-256 checksum.
+The distributable JAR is written to `build/libs/recruits-performance-1.20.1-1.0.0-alpha.5.jar`. The checked-in wrapper verifies Gradle 8.5 with its official SHA-256 checksum.
 
 ## Install
 
@@ -33,17 +35,17 @@ Client settings are generated at `config/recruits-performance-client.toml`. The 
 ## Rendering behavior
 
 - Vanilla Recruits rendering is cancelled only after the complete body and equipped loadout has converted successfully.
-- The source renderer owns the first 72 blocks by default, covering vanilla nameplates plus smooth Player Animator/Recruits SPA locomotion and complete third-party armor layers.
-- Active hurt frames and Better Mob Combat attacks retain their source animation/overlay path at every distance.
-- When Iris/Oculus reports an active shader pack, source entity rendering is retained so the shader pack receives its expected entity render types and framebuffer outputs.
+- Supported recruits stay instanced at every distance; there is no blanket near-field source-renderer zone.
+- Hurt flashes and Better Mob Combat attacks use GPU overlay and animation states without leaving the instanced path.
+- When Iris/Oculus reports an active shader pack, the instanced crowd pass moves to `AFTER_LEVEL` instead of disabling itself.
 - If a foreign model cannot produce reusable geometry, that entity keeps its original renderer and the fallback is reported. Equipment is never silently omitted.
 - The supported Recruits humanoid material adapter preserves biome, faction and companion overlays; unknown Recruits body formats and custom-head items deliberately retain vanilla rendering.
 - Body, helmet, chest, leg, boot, main-hand and off-hand geometry are cached separately, so mixed loadouts retain component batching.
 - Captured source-model bone rotations and moving pivots are shared by body, armor and both held-item components through one pose index per entity.
 - Epic Knights `ArmorDecoration` geometry, dye overlays and surcoat heraldry are resolved from the registered model layers and material paths used by the source mod and its addons.
 - Mounted Icy's Better Horses 2.1.6 entities use a 16-part exact pose palette plus reusable body/tack meshes when carrying a recruit. Stabilizers, banners and optional horn layers retain the source renderer.
-- Cruor-bloodied weapons, foil/glint equipment, glowing entities, custom heads and unsupported dynamic layers deliberately retain their source renderer instead of folding incompatible material passes into the block atlas.
-- Names use the source living-entity renderer throughout Minecraft's full visible nameplate range.
+- Cruor-bloodied weapons retain a shared base mesh plus a correctly textured dynamic stain pass. Cruor state is snapshotted once per tick and unique stain detail is omitted beyond its configured distance.
+- Named recruits use the instanced world-pass nameplate queue throughout Minecraft's visible label range.
 - Resource reload destroys all GPU objects and lazily rebuilds them from the newly baked models.
 - Shader initialization writes the exact minimal and crowd GLSL sources to `logs/recruits-performance-shaders`, records their types, byte lengths and SHA-256 digests, and uses guarded NUL-terminated native buffers for AMD driver safety.
 - Minecraft's depth buffer, camera matrices, fog, alpha cutout and sampled block/sky light remain active for the crowd pass.

@@ -1,12 +1,14 @@
 package dev.lastpagans.recruitsperformance.client.scene;
 
+import dev.lastpagans.recruitsperformance.client.compat.BetterCombatCompat;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.UseAnim;
 
 public enum CrowdAnimation {
-    IDLE(0), WALK(1), RUN(2), ATTACK(3), BLOCK(4), BOW(5), CROSSBOW(6), HIT(7), DEATH(8);
+    IDLE(0), WALK(1), RUN(2), ATTACK(3), BLOCK(4), BOW(5), CROSSBOW(6), HIT(7), DEATH(8),
+    BETTER_COMBAT(9);
 
     private final int shaderId;
 
@@ -24,6 +26,7 @@ public enum CrowdAnimation {
         String hint = entity.getPersistentData().getString("RecruitsRTSAnimHint");
         if ("SPEAR_THROW".equals(hint)) return ATTACK;
         if ("ROUTING".equals(hint)) return RUN;
+        if (BetterCombatCompat.hasActiveAttackAnimation(entity)) return BETTER_COMBAT;
         if (entity.swinging) return ATTACK;
         ItemStack using = entity.getUseItem();
         if (!using.isEmpty() && entity.getUseItemRemainingTicks() > 0) {

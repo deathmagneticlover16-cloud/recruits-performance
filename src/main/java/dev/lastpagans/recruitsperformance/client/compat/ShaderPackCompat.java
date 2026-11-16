@@ -1,42 +1,35 @@
 package dev.lastpagans.recruitsperformance.client.compat;
 
-import dev.lastpagans.recruitsperformance.RecruitsPerformance;
-
 import java.lang.reflect.Method;
 
-/** Keeps raw OpenGL crowd draws out of shader-pack framebuffers they cannot describe. */
+/** Selects a late instanced pass for Iris/Oculus without disabling GPU rendering. */
 public final class ShaderPackCompat {
     private static final String[] API_CLASSES = {
             "net.irisshaders.iris.api.v0.IrisApi",
             "net.coderbot.iris.api.v0.IrisApi"
     };
+    private static final long CHECK_INTERVAL_NANOS = 250_000_000L;
 
     private static boolean searched;
-    private static boolean warned;
     private static Object api;
     private static Method shaderPackInUse;
+    private static long lastCheck;
+    private static boolean cachedActive;
 
     private ShaderPackCompat() {}
 
     public static boolean isShaderPackActive() {
         initialize();
         if (api == null || shaderPackInUse == null) return false;
+        long now = System.nanoTime();
+        if (now - lastCheck < CHECK_INTERVAL_NANOS) return cachedActive;
+        lastCheck = now;
         try {
-            boolean active = (boolean) shaderPackInUse.invoke(api);
-            if (active && !warned) {
-                warned = true;
-                RecruitsPerformance.LOGGER.info(
-                        "Shader pack detected; preserving the source entity renderer for correct shader-pack output");
-            }
-            return active;
-        } catch (ReflectiveOperationException | RuntimeException failure) {
-            if (!warned) {
-                warned = true;
-                RecruitsPerformance.LOGGER.warn(
-                        "Could not query the installed Iris/Oculus API; preserving the source renderer", failure);
-            }
-            return true;
+            cachedActive = (boolean) shaderPackInUse.invoke(api);
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            cachedActive = false;
         }
+        return cachedActive;
     }
 
     private static void initialize() {
@@ -45,8 +38,7 @@ public final class ShaderPackCompat {
         for (String className : API_CLASSES) {
             try {
                 Class<?> type = Class.forName(className, false, ShaderPackCompat.class.getClassLoader());
-                Method getInstance = type.getMethod("getInstance");
-                api = getInstance.invoke(null);
+                api = type.getMethod("getInstance").invoke(null);
                 shaderPackInUse = type.getMethod("isShaderPackInUse");
                 return;
             } catch (ReflectiveOperationException | LinkageError ignored) {

@@ -67,6 +67,7 @@ public final class CrowdShader implements AutoCloseable {
             out vec4 vColor;
             out float vLight;
             out float vFogDistance;
+            out float vHurt;
 
             mat3 rotX(float a) { float c=cos(a), s=sin(a); return mat3(1,0,0, 0,c,s, 0,-s,c); }
             mat3 rotY(float a) { float c=cos(a), s=sin(a); return mat3(c,0,-s, 0,1,0, s,0,c); }
@@ -112,6 +113,14 @@ public final class CrowdShader implements AutoCloseable {
                     if (bone == 3) return rotX(-1.30) * rotY(0.55);
                 }
                 if (iAnimation == 7.0 && (bone == 1 || bone == 0)) return rotX(-0.18 * sin(iPhase * 2.4));
+                if (iAnimation == 9.0) {
+                    float progress = clamp(iPhase / 8.0, 0.0, 1.0);
+                    float strike = sin(progress * 3.1415926);
+                    float sweep = sin(progress * 6.2831853);
+                    if (bone == 1) return rotY(-0.24 * sweep);
+                    if (bone == 2) return rotX(-2.35 * strike) * rotY(-0.42 * sweep);
+                    if (bone == 3) return rotX(-0.32 * strike) * rotY(0.16 * sweep);
+                }
                 return mat3(1.0);
             }
 
@@ -143,6 +152,7 @@ public final class CrowdShader implements AutoCloseable {
                 vColor = aColor * iColor;
                 vLight = clamp(max(iLight.x, iLight.y), 0.12, 1.0);
                 vFogDistance = length(viewPosition.xyz);
+                vHurt = iAnimation == 7.0 ? 1.0 : 0.0;
             }
             """;
 
@@ -153,6 +163,7 @@ public final class CrowdShader implements AutoCloseable {
             in vec4 vColor;
             in float vLight;
             in float vFogDistance;
+            in float vHurt;
             uniform sampler2D uTexture;
             uniform vec3 uFogColor;
             uniform float uFogStart;
@@ -163,6 +174,7 @@ public final class CrowdShader implements AutoCloseable {
                 if (texel.a < 0.1) discard;
                 float diffuse = 0.68 + 0.32 * max(dot(normalize(vNormal), normalize(vec3(0.2, 1.0, -0.35))), 0.0);
                 vec3 lit = texel.rgb * vLight * diffuse;
+                lit = mix(lit, vec3(1.0, 0.08, 0.08), vHurt * 0.24);
                 float fog = clamp((uFogEnd - vFogDistance) / max(uFogEnd - uFogStart, 0.001), 0.0, 1.0);
                 fragColor = vec4(mix(uFogColor, lit, fog), texel.a);
             }

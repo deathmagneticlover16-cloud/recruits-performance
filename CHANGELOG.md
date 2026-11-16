@@ -1,3 +1,14 @@
+# 1.0.0 Alpha 5
+
+- Removed the 72-block source-renderer zone; supported recruits remain GPU-instanced at every distance.
+- Reduced per-recruit exact pose evaluation from 96 blocks to a hard five-block maximum; all farther animation uses shared GPU states.
+- Kept hurt frames in the instanced path and replaced the exaggerated multiplier with a restrained GPU hurt overlay.
+- Cached Better Mob Combat state once per entity tick and added a shared GPU attack phase instead of falling back to vanilla rendering.
+- Kept instancing enabled with Iris/Oculus and moved the crowd pass to `AFTER_LEVEL` while a shader pack is active so it is drawn after shader-pack composition.
+- Replaced Cruor's per-recruit map scan with one cached snapshot per client tick.
+- Split Cruor stains into their own dynamic-texture GPU pass, kept the base weapon instanced, and distance-culled unique stain passes beyond 16 blocks while retaining normal depth-buffer occlusion.
+- Restored GPU-pass nameplates for named recruits without retaining the source renderer.
+
 # 1.0.0 Alpha 4
 
 - Restored the source renderer inside 72 blocks so vanilla nameplates, smooth Player Animator/Recruits SPA locomotion, complete armor layers and exact mount transforms render normally up close.

@@ -20,19 +20,24 @@ public final class ItemMeshConverter {
 
     private ItemMeshConverter() {}
 
-    public static MeshData convert(LivingEntity entity, ItemStack stack, boolean leftHand, ModelPart arm) {
+    public static MeshData convertBase(LivingEntity entity, ItemStack stack, boolean leftHand, ModelPart arm) {
+        return convert(entity, stack, leftHand, arm, false);
+    }
+
+    public static MeshData convertCruor(LivingEntity entity, ItemStack stack, boolean leftHand, ModelPart arm) {
+        return convert(entity, stack, leftHand, arm, true);
+    }
+
+    private static MeshData convert(LivingEntity entity, ItemStack stack, boolean leftHand, ModelPart arm,
+                                    boolean cruorPass) {
         MeshData.Builder builder = new MeshData.Builder();
         CaptureVertexConsumer consumer = new CaptureVertexConsumer(builder);
         PartPose bind = arm.getInitialPose();
         consumer.bone(leftHand ? HumanoidMeshConverter.LEFT_ARM : HumanoidMeshConverter.RIGHT_ARM);
         consumer.pivot(bind.x / 16.0F, bind.y / 16.0F, bind.z / 16.0F);
-        boolean[] rejectedDynamicPass = {false};
         MultiBufferSource buffers = renderType -> {
-            if (isDynamicForeignPass(renderType)) {
-                rejectedDynamicPass[0] = true;
-                return DISCARD;
-            }
-            return consumer;
+            boolean dynamic = isDynamicForeignPass(renderType);
+            return dynamic == cruorPass ? consumer : DISCARD;
         };
         PoseStack pose = new PoseStack();
         pose.translate(bind.x / 16.0F, bind.y / 16.0F, bind.z / 16.0F);
@@ -43,9 +48,6 @@ public final class ItemMeshConverter {
                 entity, stack,
                 leftHand ? ItemDisplayContext.THIRD_PERSON_LEFT_HAND : ItemDisplayContext.THIRD_PERSON_RIGHT_HAND,
                 leftHand, pose, buffers, entity.level(), 0x00F000F0, OverlayTexture.NO_OVERLAY, entity.getId());
-        if (rejectedDynamicPass[0]) {
-            throw new IllegalStateException("Dynamic Cruor item pass requires the source renderer");
-        }
         MeshData data = builder.buildQuads();
         if (data.vertexCount() > MAX_CAPTURED_VERTICES) {
             throw new IllegalStateException("Item capture exceeded the geometry safety limit: " + data.vertexCount());
