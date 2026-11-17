@@ -4,9 +4,12 @@ import dev.lastpagans.recruitsperformance.client.mesh.HorseModelAdapter;
 import dev.lastpagans.recruitsperformance.runtime.RecruitIntrospector;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.fml.ModList;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -20,6 +23,11 @@ public final class IcysHorsesCompat {
     private static final String ENTITY_CLASS = "icy.betterhorses.net.entity.BhBreedHorse";
     private static final String TACK_CLASS = "icy.betterhorses.net.client.render.BhTackLayer";
     private static final String HORN_CLASS = "icy.betterhorses.net.client.render.BhUnicornHornLayer";
+    private static final String MOTION_CLASS = "icy.betterhorses.net.client.render.BhRiderMotion";
+    private static final String SEAT_CLASS = "icy.betterhorses.net.BhRiderSeat";
+    private static final boolean SERIOUS_ANIMATIONS =
+            ModList.get().isLoaded("recruits_serious_animations");
+    private static volatile RiderAccess riderAccess;
 
     private IcysHorsesCompat() {}
 
@@ -34,6 +42,37 @@ public final class IcysHorsesCompat {
     public static boolean isRecruitRidingIcysHorse(LivingEntity entity) {
         Entity vehicle = entity.getVehicle();
         return RecruitIntrospector.isRecruit(entity) && vehicle != null && isClass(vehicle, ENTITY_CLASS);
+    }
+
+    /** Reads the exact saddle transform published by Icy's own horse renderer. */
+    public static RiderTransform riderTransform(LivingEntity entity, float partialTick) {
+        if (!isRecruitRidingIcysHorse(entity) || !(entity.getVehicle() instanceof LivingEntity horse)) {
+            return RiderTransform.NONE;
+        }
+        try {
+            RiderAccess access = riderAccess();
+            Object motion = access.motionGet.invoke(null, horse.getId());
+            Vec3 seat = (Vec3) access.seatApplied.invoke(null, horse.getId());
+            float right = number(access.right.invoke(motion));
+            float up = number(access.up.invoke(motion));
+            float forward = number(access.forward.invoke(motion));
+            float pitch = number(access.pitch.invoke(motion));
+            float roll = number(access.roll.invoke(motion));
+            float horseYawDegrees = Mth.rotLerp(partialTick, horse.yBodyRotO, horse.yBodyRot);
+            float radians = horseYawDegrees * Mth.DEG_TO_RAD;
+            float cosine = Mth.cos(radians);
+            float sine = Mth.sin(radians);
+            return new RiderTransform(
+                    right * -cosine + forward * -sine - (float) seat.x,
+                    up - (float) seat.y,
+                    right * -sine + forward * cosine - (float) seat.z,
+                    Mth.PI - radians,
+                    pitch,
+                    roll,
+                    SERIOUS_ANIMATIONS ? -0.45F : 0.0F);
+        } catch (ReflectiveOperationException | LinkageError | RuntimeException failure) {
+            throw new IllegalStateException("Icy's Better Horses 2.1.6 rider-motion contract changed", failure);
+        }
     }
 
     public static List<Tack> tacks(LivingEntityRenderer<?, ?> renderer, LivingEntity horse) {
@@ -113,5 +152,39 @@ public final class IcysHorsesCompat {
         return false;
     }
 
+    private static RiderAccess riderAccess() throws ReflectiveOperationException {
+        RiderAccess cached = riderAccess;
+        if (cached != null) return cached;
+        synchronized (IcysHorsesCompat.class) {
+            cached = riderAccess;
+            if (cached != null) return cached;
+            Class<?> motion = Class.forName(MOTION_CLASS);
+            Class<?> seat = Class.forName(SEAT_CLASS);
+            cached = new RiderAccess(
+                    motion.getMethod("get", int.class),
+                    motion.getMethod("right"),
+                    motion.getMethod("up"),
+                    motion.getMethod("forward"),
+                    motion.getMethod("pitch"),
+                    motion.getMethod("roll"),
+                    seat.getMethod("applied", int.class));
+            riderAccess = cached;
+            return cached;
+        }
+    }
+
+    private static float number(Object value) {
+        return ((Number) value).floatValue();
+    }
+
     public record Tack(Object model, ResourceLocation texture, int tint) {}
+
+    public record RiderTransform(float x, float y, float z, float horseYaw, float pitch, float roll,
+                                 float anchor) {
+        private static final RiderTransform NONE = new RiderTransform(0.0F, 0.0F, 0.0F,
+                0.0F, 0.0F, 0.0F, 0.0F);
+    }
+
+    private record RiderAccess(Method motionGet, Method right, Method up, Method forward,
+                               Method pitch, Method roll, Method seatApplied) {}
 }

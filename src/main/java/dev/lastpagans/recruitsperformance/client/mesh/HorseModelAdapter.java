@@ -87,6 +87,9 @@ public final class HorseModelAdapter {
         Matrix4f[] bind = globals(parts, true);
         Matrix4f[] current = globals(parts, false);
         float[] values = new float[PoseData.BONE_COUNT * PoseData.FLOATS_PER_BONE];
+        for (int bone = 0; bone < PoseData.BONE_COUNT; bone++) {
+            PoseData.putMatrix(values, bone, new Matrix4f());
+        }
         for (int bone = 0; bone < parts.length; bone++) {
             Matrix4f skin = new Matrix4f(current[bone]).mul(new Matrix4f(bind[bone]).invert());
             PoseData.putMatrix(values, bone, skin);

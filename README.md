@@ -4,9 +4,9 @@ Recruits Performance is a Forge 1.20.1 client renderer and server performance ru
 
 The renderer converts the active Recruits humanoid `ModelPart` hierarchy into one reusable body mesh. Recruits biome, faction-cloth and companion-cloth materials reuse that same geometry as separate instanced batches. Armor is resolved through Forge's `IClientItemExtensions#getHumanoidArmorModel` hook, which is the model-format API used by Epic Knights 10.15 and compatible addons. Standard and custom humanoid armor therefore use the same automatic converter instead of an item whitelist, with dyed base and overlay materials sharing one converted geometry allocation. Main-hand and off-hand baked item geometry is captured once and attached to the animated arm bones. Dynamic equipment changes select a different cached component without rebuilding unrelated soldiers.
 
-Every body and equipment vertex carries a compact bone identifier. Exact GPU poses can be uploaded as 3x4 skin matrices to a shared 16-bone pose buffer before the far field switches to shared procedural animation. Body, armor and held-item instances reference the pose by index, so they stay aligned without duplicating pose data per component. Geometry LODs omit secondary soldier and horse detail at long range while retaining their core silhouettes and material identity. Instances sharing a mesh and texture are submitted with `glDrawElementsInstanced`.
+Every body and equipment vertex carries a compact bone identifier. Exact GPU poses are uploaded as 3x4 skin matrices to a shared 17-bone pose buffer, with a dedicated whole-body animation slot. Body, armor and held-item instances reference one pose per entity, so they stay aligned without duplicating pose data per component. Geometry LODs omit secondary soldier and horse detail at long range while retaining their core silhouettes and material identity. Instances sharing a mesh and texture are submitted with `glDrawElementsInstanced`.
 
-Per-recruit source-model pose evaluation is capped at five blocks. Beyond that distance, animation state and timing are cached and evaluated in the shared GPU path; this is not a vanilla-renderer boundary.
+Each recruit's native model and Mob Player Animator stack is sampled at stable tick endpoints and interpolated for the current render frame. This removes quantized pose snapping and avoids rerunning reflective animation extraction at monitor refresh rate while keeping every supported distance in the instanced path.
 
 ## Requirements
 
@@ -16,7 +16,7 @@ Per-recruit source-model pose evaluation is capped at five blocks. Beyond that d
 - Villager Recruits 1.15.2 or newer compatible 1.20.1 build
 - OpenGL 3.3 or newer; OpenGL 4.6 hardware is recommended
 
-Epic Knights and Recruits RTS are optional integrations. Their conventional humanoid armor and item models are discovered through Forge and Minecraft model APIs without a compile-time dependency.
+The compatibility baseline is Recruits 1.15.2, Recruits Serious Animations 0.13.3, Mob Player Animator 1.3.3, Serious Player Animations 1.1.1, Better Mob Combat Recruits Fix 1.3.1, Better Combat 1.8.6, Icy's Better Horses 2.1.6, Oculus 1.8.0, Last Pagans Assorted Fixes 1.2.3, Recruits RTS Camera 0.24.5-server.1, and the supplied Epic Knights Addon 2.6, Dark Ages 1.1, Slavic Armory 2.1 and Antique Legacy 1.13 builds. Integrations remain reflection-only so those client visual mods are not hard server dependencies.
 
 ## Build
 
@@ -24,7 +24,7 @@ Epic Knights and Recruits RTS are optional integrations. Their conventional huma
 ./gradlew clean build
 ```
 
-The distributable JAR is written to `build/libs/recruits-performance-1.20.1-1.0.0-alpha.5.jar`. The checked-in wrapper verifies Gradle 8.5 with its official SHA-256 checksum.
+The distributable JAR is written to `build/libs/recruits-performance-1.20.1-1.0.0-alpha.7.jar`. The checked-in wrapper verifies Gradle 8.5 with its official SHA-256 checksum.
 
 ## Install
 
@@ -41,11 +41,11 @@ Client settings are generated at `config/recruits-performance-client.toml`. The 
 - If a foreign model cannot produce reusable geometry, that entity keeps its original renderer and the fallback is reported. Equipment is never silently omitted.
 - The supported Recruits humanoid material adapter preserves biome, faction and companion overlays; unknown Recruits body formats and custom-head items deliberately retain vanilla rendering.
 - Body, helmet, chest, leg, boot, main-hand and off-hand geometry are cached separately, so mixed loadouts retain component batching.
-- Captured source-model bone rotations and moving pivots are shared by body, armor and both held-item components through one pose index per entity.
-- Epic Knights `ArmorDecoration` geometry, dye overlays and surcoat heraldry are resolved from the registered model layers and material paths used by the source mod and its addons.
-- Mounted Icy's Better Horses 2.1.6 entities use a 16-part exact pose palette plus reusable body/tack meshes when carrying a recruit. Stabilizers, banners and optional horn layers retain the source renderer.
+- Captured source-model bone rotations, Mob Player Animator whole-body motion, moving pivots and item channels are shared by body, armor and both held-item components through one pose index per entity.
+- Epic Knights `ArmorDecoration` geometry, dye overlays and surcoat heraldry are obtained from the live registered renderer layer, including models registered by its installed addons.
+- Mounted Icy's Better Horses 2.1.6 entities retain all 16 native horse-part transforms plus reusable body/tack meshes when carrying a recruit. Riders consume Icy's published saddle translation, pitch and roll instead of a hand-authored mount animation. Stabilizers, banners and optional horn layers retain the source renderer.
 - Cruor-bloodied weapons retain a shared base mesh plus a correctly textured dynamic stain pass. Cruor state is snapshotted once per tick and unique stain detail is omitted beyond its configured distance.
-- Named recruits use the instanced world-pass nameplate queue throughout Minecraft's visible label range.
+- Only Villager Recruits units under the crosshair use the instanced nameplate queue; mounts and unrelated entities never enter it.
 - Resource reload destroys all GPU objects and lazily rebuilds them from the newly baked models.
 - Shader initialization writes the exact minimal and crowd GLSL sources to `logs/recruits-performance-shaders`, records their types, byte lengths and SHA-256 digests, and uses guarded NUL-terminated native buffers for AMD driver safety.
 - Minecraft's depth buffer, camera matrices, fog, alpha cutout and sampled block/sky light remain active for the crowd pass.
@@ -57,4 +57,4 @@ See [BENCHMARKING.md](BENCHMARKING.md) for the reproducible 300–2,000-soldier 
 
 ## Known limits
 
-Animated geometry supplied only through an unsupported procedural renderer keeps its original renderer and increments the fallback counter. Camera-frustum acceptance remains Minecraft's conservative entity culling; this release does not add compute/indirect occlusion culling or impostors. Far-field humanoids use the listed procedural states rather than arbitrary third-party animation graphs. Distant Horizons renders terrain rather than living entities, so soldier and horse LOD selection remains in Recruits Performance while using the extended terrain view around them. Shader-pack visual equivalence and RX 570 performance still require an actual modded client/GPU run; the cloud source environment cannot emulate those results.
+Animated geometry supplied only through an unsupported procedural renderer keeps its original renderer and increments the fallback counter. Camera-frustum acceptance remains Minecraft's conservative entity culling; this release does not add compute/indirect occlusion culling or impostors. Distant Horizons renders terrain rather than living entities, so soldier and horse LOD selection remains in Recruits Performance while using the extended terrain view around them. Shader-pack visual equivalence and RX 570 performance still require an actual modded client/GPU run; the cloud source environment cannot emulate those results.

@@ -1,3 +1,13 @@
+# 1.0.0 Alpha 7
+
+- Restricted the hover nameplate queue to Villager Recruits entities and removed mounted horses from the label path.
+- Removed shared quantized pose keys and duplicate Player Animator application; each recruit now keeps stable tick-endpoint poses that are interpolated per render frame while remaining GPU-instanced.
+- Expanded the pose buffer to 17 bones and preserved Mob Player Animator's whole-body and held-item channels, including Recruits Serious Animations and Better Mob Combat animation stacks, without colliding with Icy's 16 horse-part slots.
+- Read Icy's Better Horses 2.1.6 native `BhRiderMotion` and `BhRiderSeat` outputs so instanced riders inherit the horse renderer's saddle translation, pitch, roll and Recruits Serious Animations seat anchor.
+- Replaced guessed Epic Knights decoration layers with the live registered `ArmorDecorationLayer`, including the models and textures contributed by Epic Knights Addon, Dark Ages, Slavic Armory and Antique Legacy, and matched their no-cull render state so one-sided plates and cloth are not discarded.
+- Kept the Oculus 1.8.0 path instanced and reduced animation sampling/reflection work from every rendered frame to stable per-entity tick endpoints.
+- Bumped the mod to `1.0.0-alpha.7`.
+
 # 1.0.0 Alpha 6
 
 - Removed every hand-authored walk, run, attack, block, bow, crossbow and Better Combat transform from the crowd shader.

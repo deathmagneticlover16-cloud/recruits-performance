@@ -3,18 +3,24 @@ package dev.lastpagans.recruitsperformance.client.scene;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.model.geom.PartPose;
+import net.minecraft.util.Mth;
 import org.joml.Matrix4f;
 
 public record PoseData(float[] values) {
-    public static final int BONE_COUNT = 16;
+    public static final int BONE_COUNT = 17;
     public static final int FLOATS_PER_BONE = 12;
     public static final int TEXELS_PER_BONE = 4;
 
     public static PoseData capture(HumanoidModel<?> model) {
-        return capture(model, new Matrix4f(), new Matrix4f());
+        return capture(model, new Matrix4f(), new Matrix4f(), new Matrix4f());
     }
 
     public static PoseData capture(HumanoidModel<?> model, Matrix4f rightItem, Matrix4f leftItem) {
+        return capture(model, rightItem, leftItem, new Matrix4f());
+    }
+
+    public static PoseData capture(HumanoidModel<?> model, Matrix4f rightItem, Matrix4f leftItem,
+                                   Matrix4f bodyTransform) {
         float[] values = new float[BONE_COUNT * FLOATS_PER_BONE];
         for (int bone = 0; bone < BONE_COUNT; bone++) putIdentity(values, bone);
         put(values, 0, model.head);
@@ -25,7 +31,21 @@ public record PoseData(float[] values) {
         put(values, 5, model.leftLeg);
         putItem(values, 6, model.rightArm, rightItem);
         putItem(values, 7, model.leftArm, leftItem);
+        putMatrix(values, 16, bodyTransform);
         return new PoseData(values);
+    }
+
+    public static void interpolate(PoseData start, PoseData end, float partialTick, PoseData destination) {
+        float delta = Mth.clamp(partialTick, 0.0F, 1.0F);
+        float[] from = start.values;
+        float[] to = end.values;
+        float[] result = destination.values;
+        if (from.length != to.length || result.length != from.length) {
+            throw new IllegalArgumentException("Pose interpolation buffers have different lengths");
+        }
+        for (int index = 0; index < result.length; index++) {
+            result[index] = Mth.lerp(delta, from[index], to[index]);
+        }
     }
 
     private static void put(float[] values, int bone, ModelPart part) {

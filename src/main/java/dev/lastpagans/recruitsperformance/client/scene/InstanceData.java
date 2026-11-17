@@ -13,17 +13,21 @@ public record InstanceData(
         float blockLight, float skyLight,
         float poseIndex,
         float scale,
+        float mountYaw,
+        float mountPitch,
+        float mountRoll,
+        float mountAnchor,
         int entityId
 ) {
     public static InstanceData from(LivingEntity entity, float partialTick, int packedLight,
                                     int poseIndex, float scale) {
         float x = (float) Mth.lerp(partialTick, entity.xOld, entity.getX());
         float y = (float) Mth.lerp(partialTick, entity.yOld, entity.getY());
-        if (IcysHorsesCompat.isRecruitRidingIcysHorse(entity)) {
-            // Recruits SPA uses the same seat correction in IcysHorseRiderAnchor.
-            y -= 0.45F;
-        }
         float z = (float) Mth.lerp(partialTick, entity.zOld, entity.getZ());
+        IcysHorsesCompat.RiderTransform rider = IcysHorsesCompat.riderTransform(entity, partialTick);
+        x += rider.x();
+        y += rider.y();
+        z += rider.z();
         float yaw = Mth.PI - Mth.lerp(partialTick, entity.yBodyRotO, entity.yBodyRot) * Mth.DEG_TO_RAD;
         CrowdAnimation animation = CrowdAnimation.select(entity);
         float phase;
@@ -40,6 +44,7 @@ public record InstanceData(
                 ((packedLight >>> 16) & 0xFFFF) / 240.0F,
                 poseIndex,
                 scale,
+                rider.horseYaw(), rider.pitch(), rider.roll(), rider.anchor(),
                 entity.getId());
     }
 
@@ -49,6 +54,7 @@ public record InstanceData(
                 green * ((tint >> 8) & 255) / 255.0F,
                 blue * (tint & 255) / 255.0F,
                 alpha * ((tint >>> 24) & 255) / 255.0F,
-                blockLight, skyLight, poseIndex, scale, entityId);
+                blockLight, skyLight, poseIndex, scale,
+                mountYaw, mountPitch, mountRoll, mountAnchor, entityId);
     }
 }

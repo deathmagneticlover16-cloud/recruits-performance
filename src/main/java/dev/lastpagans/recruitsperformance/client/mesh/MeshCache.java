@@ -2,13 +2,14 @@ package dev.lastpagans.recruitsperformance.client.mesh;
 
 import dev.lastpagans.recruitsperformance.client.gpu.GpuMesh;
 import dev.lastpagans.recruitsperformance.client.compat.CruorCompat;
+import dev.lastpagans.recruitsperformance.client.compat.EpicKnightsCompat;
 import dev.lastpagans.recruitsperformance.client.scene.MeshKey;
 import dev.lastpagans.recruitsperformance.config.CrowdRendererConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelLayers;
-import net.minecraft.client.model.geom.ModelLayerLocation;
 import net.minecraft.client.renderer.Sheets;
+import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -65,18 +66,19 @@ public final class MeshCache implements AutoCloseable {
                 () -> HorseModelAdapter.convert(model, fullDetail));
     }
 
-    public List<MeshHandle> equipment(LivingEntity entity, HumanoidModel<?> bodyModel, boolean fullDetail,
-                                      boolean cruorDetail) {
+    public List<MeshHandle> equipment(LivingEntity entity, LivingEntityRenderer<?, ?> renderer,
+                                      HumanoidModel<?> bodyModel, boolean fullDetail, boolean cruorDetail) {
         ItemStack head = entity.getItemBySlot(EquipmentSlot.HEAD);
         if (!head.isEmpty() && !(head.getItem() instanceof ArmorItem)) {
             throw new IllegalStateException("Non-armor head item requires the vanilla custom-head layer: " +
                     BuiltInRegistries.ITEM.getKey(head.getItem()));
         }
         List<MeshHandle> result = new ArrayList<>(6);
-        armor(entity, EquipmentSlot.HEAD, result);
-        armor(entity, EquipmentSlot.CHEST, result);
-        armor(entity, EquipmentSlot.LEGS, result);
-        armor(entity, EquipmentSlot.FEET, result);
+        EpicKnightsCompat.Layer epicLayer = EpicKnightsCompat.layer(renderer);
+        armor(entity, EquipmentSlot.HEAD, epicLayer, result);
+        armor(entity, EquipmentSlot.CHEST, epicLayer, result);
+        armor(entity, EquipmentSlot.LEGS, epicLayer, result);
+        armor(entity, EquipmentSlot.FEET, epicLayer, result);
         if (!fullDetail) return result;
         boolean mainUsesLeftArm = entity.getMainArm() == HumanoidArm.LEFT;
         item(entity, entity.getMainHandItem(), mainUsesLeftArm, MeshKey.Kind.MAIN_HAND,
@@ -118,7 +120,8 @@ public final class MeshCache implements AutoCloseable {
         outerArmor = null;
     }
 
-    private void armor(LivingEntity entity, EquipmentSlot slot, List<MeshHandle> result) {
+    private void armor(LivingEntity entity, EquipmentSlot slot, EpicKnightsCompat.Layer epicLayer,
+                       List<MeshHandle> result) {
         ItemStack stack = entity.getItemBySlot(slot);
         if (!(stack.getItem() instanceof ArmorItem armor)) return;
         if (stack.hasFoil()) throw new IllegalStateException("Foil armor requires the vanilla glint pass");
@@ -151,7 +154,7 @@ public final class MeshCache implements AutoCloseable {
             if (overlayHandle == null) throw new IllegalStateException("Armor overlay produced no geometry: " + itemId);
             result.add(overlayHandle);
         }
-        decorations(stack, result);
+        decorations(stack, epicLayer, result);
     }
 
     private void item(LivingEntity entity, ItemStack stack, boolean left, MeshKey.Kind kind,
@@ -204,35 +207,60 @@ public final class MeshCache implements AutoCloseable {
             meshes.put(geometry, mesh);
             if (equipment) equipmentMeshes.add(geometry);
         }
-        return new MeshHandle(key, mesh, texture, tint, equipment, key.kind() != MeshKey.Kind.DECORATION);
+        boolean cull = key.kind() == MeshKey.Kind.BODY
+                || key.kind() == MeshKey.Kind.MAIN_HAND
+                || key.kind() == MeshKey.Kind.OFF_HAND
+                || key.kind() == MeshKey.Kind.HORSE_BODY
+                || key.kind() == MeshKey.Kind.IMPOSTOR;
+        return new MeshHandle(key, mesh, texture, tint, equipment, cull);
     }
 
-    private void decorations(ItemStack stack, List<MeshHandle> result) {
+    private void decorations(ItemStack stack, EpicKnightsCompat.Layer epicLayer, List<MeshHandle> result) {
         CompoundTag decorationRoot = stack.getTagElement("ArmorDecoration");
         if (decorationRoot != null) {
+            if (epicLayer == null) {
+                throw new IllegalStateException("Epic Knights decoration data exists without its renderer layer");
+            }
             ListTag items = decorationRoot.getList("Items", Tag.TAG_COMPOUND);
             for (int index = 0; index < items.size(); index++) {
                 CompoundTag entry = items.getCompound(index);
                 ResourceLocation location = decorationLocation(entry.getString("name"));
-                addDecoration(location, entry.getBoolean("dyeable"), entry.getInt("color"), result);
+                addDecoration(epicLayer, location, entry.getBoolean("dyeable"), entry.getInt("color"), result);
             }
         }
         if (stack.getItem() instanceof ArmorItem armor && armor.getEquipmentSlot() == EquipmentSlot.CHEST
                 && net.minecraft.world.item.BlockItem.getBlockEntityData(stack) != null) {
-            addDecoration(new ResourceLocation("magistuarmory", "surcoat"), false, 0xFFFFFF, result);
+            if (epicLayer == null) {
+                throw new IllegalStateException("Epic Knights surcoat data exists without its renderer layer");
+            }
+            addSurcoat(epicLayer, result);
             List<Pair<Holder<BannerPattern>, DyeColor>> patterns = BannerBlockEntity.createPatterns(
                     ShieldItem.getColor(stack), BannerBlockEntity.getItemPatterns(stack));
             for (Pair<Holder<BannerPattern>, DyeColor> pattern : patterns) {
                 pattern.getFirst().unwrapKey().ifPresent(key ->
-                        addSurcoatPattern(key.location(), pattern.getSecond(), result));
+                        addSurcoatPattern(epicLayer, key.location(), pattern.getSecond(), result));
             }
         }
     }
 
-    private void addSurcoatPattern(ResourceLocation pattern, DyeColor color, List<MeshHandle> result) {
-        String geometry = "epic-decoration:magistuarmory:surcoat";
-        ResourceLocation texture = new ResourceLocation("magistuarmory",
-                "textures/models/armor/surcoat/" + pattern.getPath() + ".png");
+    private void addSurcoat(EpicKnightsCompat.Layer layer, List<MeshHandle> result) {
+        HumanoidModel<?> model = EpicKnightsCompat.coatModel(layer);
+        String geometry = "epic-surcoat:" + model.getClass().getName() + ":"
+                + Integer.toHexString(System.identityHashCode(model));
+        ResourceLocation texture = EpicKnightsCompat.baseTexture(layer);
+        MeshKey key = new MeshKey(geometry, texture, -1, MeshKey.Kind.DECORATION);
+        MeshHandle handle = handle(key, geometry, texture, 0xFFFFFFFF, true,
+                () -> HumanoidMeshConverter.convert(model));
+        if (handle == null) throw new IllegalStateException("Epic Knights surcoat model produced no geometry");
+        result.add(handle);
+    }
+
+    private void addSurcoatPattern(EpicKnightsCompat.Layer layer, ResourceLocation pattern, DyeColor color,
+                                   List<MeshHandle> result) {
+        HumanoidModel<?> model = EpicKnightsCompat.coatModel(layer);
+        String geometry = "epic-surcoat:" + model.getClass().getName() + ":"
+                + Integer.toHexString(System.identityHashCode(model));
+        ResourceLocation texture = EpicKnightsCompat.patternTexture(layer, pattern);
         MeshKey key = new MeshKey(geometry, texture, -1, MeshKey.Kind.DECORATION);
         float[] rgb = color.getTextureDiffuseColors();
         int tint = 0xFF000000 | ((int) (rgb[0] * 255.0F) << 16)
@@ -242,21 +270,20 @@ public final class MeshCache implements AutoCloseable {
         result.add(patternHandle);
     }
 
-    private void addDecoration(ResourceLocation location, boolean dyeable, int color, List<MeshHandle> result) {
-        String geometry = "epic-decoration:" + location;
-        ResourceLocation texture = decorationTexture(location, false);
+    private void addDecoration(EpicKnightsCompat.Layer layer, ResourceLocation location, boolean dyeable,
+                               int color, List<MeshHandle> result) {
+        HumanoidModel<?> model = EpicKnightsCompat.decorationModel(layer, location);
+        String geometry = "epic-decoration:" + location + ":" + model.getClass().getName() + ":"
+                + Integer.toHexString(System.identityHashCode(model));
+        ResourceLocation texture = EpicKnightsCompat.texture(layer, location, false);
         MeshKey key = new MeshKey(geometry, texture, -1, MeshKey.Kind.DECORATION);
         int tint = dyeable ? 0xFF000000 | color : 0xFFFFFFFF;
-        MeshHandle base = handle(key, geometry, texture, tint, true, () -> {
-            ModelLayerLocation layer = new ModelLayerLocation(location, "decorations");
-            HumanoidModel<LivingEntity> model = new HumanoidModel<>(
-                    Minecraft.getInstance().getEntityModels().bakeLayer(layer));
-            return HumanoidMeshConverter.convert(model);
-        });
+        MeshHandle base = handle(key, geometry, texture, tint, true,
+                () -> HumanoidMeshConverter.convert(model));
         if (base == null) throw new IllegalStateException("Epic Knights decoration produced no geometry: " + location);
         result.add(base);
         if (dyeable) {
-            ResourceLocation overlay = decorationTexture(location, true);
+            ResourceLocation overlay = EpicKnightsCompat.texture(layer, location, true);
             MeshKey overlayKey = new MeshKey(geometry, overlay, -1, MeshKey.Kind.DECORATION);
             MeshHandle overlayHandle = handle(overlayKey, geometry, overlay, 0xFFFFFFFF, true,
                     () -> { throw new IllegalStateException("Missing shared Epic Knights decoration geometry: " + location); });
@@ -268,11 +295,6 @@ public final class MeshCache implements AutoCloseable {
         ResourceLocation parsed = new ResourceLocation(name);
         return parsed.getNamespace().equals("minecraft")
                 ? new ResourceLocation("magistuarmory", parsed.getPath()) : parsed;
-    }
-
-    private static ResourceLocation decorationTexture(ResourceLocation location, boolean overlay) {
-        return new ResourceLocation(location.getNamespace(), "textures/models/armor/" + location.getPath()
-                + (overlay ? "_overlay.png" : ".png"));
     }
 
     @SuppressWarnings("unchecked")

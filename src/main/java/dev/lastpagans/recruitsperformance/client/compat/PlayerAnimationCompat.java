@@ -1,7 +1,5 @@
 package dev.lastpagans.recruitsperformance.client.compat;
 
-import net.minecraft.client.model.HumanoidModel;
-import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.world.entity.LivingEntity;
 import org.joml.Matrix4f;
 
@@ -44,7 +42,6 @@ public final class PlayerAnimationCompat {
                 return Optional.of(new ApplierAccess(
                         type.getMethod("setTickDelta", float.class),
                         type.getMethod("isActive"),
-                        type.getMethod("updatePart", String.class, ModelPart.class),
                         transform,
                         enumValue(transformType, "POSITION"),
                         enumValue(transformType, "ROTATION"),
@@ -60,38 +57,16 @@ public final class PlayerAnimationCompat {
 
     private PlayerAnimationCompat() {}
 
-    public static boolean isActive(LivingEntity entity, float partialTick) {
+    /** Mirrors the renderer's setupRotations tick-delta update before HumanoidModel.setupAnim runs. */
+    public static void prepare(LivingEntity entity, float partialTick) {
         Object applier = applier(entity);
-        if (applier == null) return false;
+        if (applier == null) return;
         Optional<ApplierAccess> access = APPLIER_ACCESS.get(applier.getClass());
-        if (access.isEmpty()) return false;
+        if (access.isEmpty()) return;
         try {
             access.get().setTickDelta.invoke(applier, partialTick);
-            return (boolean) access.get().isActive.invoke(applier);
         } catch (IllegalAccessException | InvocationTargetException | RuntimeException ignored) {
-            return false;
-        }
-    }
-
-    public static boolean apply(LivingEntity entity, HumanoidModel<?> model, float partialTick) {
-        Object applier = applier(entity);
-        if (applier == null) return false;
-        Optional<ApplierAccess> access = APPLIER_ACCESS.get(applier.getClass());
-        if (access.isEmpty()) return false;
-        try {
-            ApplierAccess methods = access.get();
-            methods.setTickDelta.invoke(applier, partialTick);
-            if (!(boolean) methods.isActive.invoke(applier)) return false;
-            update(methods, applier, "head", model.head);
-            model.hat.copyFrom(model.head);
-            update(methods, applier, "leftArm", model.leftArm);
-            update(methods, applier, "rightArm", model.rightArm);
-            update(methods, applier, "leftLeg", model.leftLeg);
-            update(methods, applier, "rightLeg", model.rightLeg);
-            update(methods, applier, "torso", model.body);
-            return true;
-        } catch (IllegalAccessException | InvocationTargetException | RuntimeException ignored) {
-            return false;
+            // The model keeps its ordinary Minecraft pose when the optional bridge is unavailable.
         }
     }
 
@@ -119,6 +94,32 @@ public final class PlayerAnimationCompat {
         }
     }
 
+    /** Matches Mob Player Animator's setupRotations body transform for the whole model. */
+    public static Matrix4f bodyTransform(LivingEntity entity, float partialTick) {
+        Object applier = applier(entity);
+        if (applier == null) return new Matrix4f();
+        Optional<ApplierAccess> access = APPLIER_ACCESS.get(applier.getClass());
+        if (access.isEmpty()) return new Matrix4f();
+        try {
+            ApplierAccess methods = access.get();
+            methods.setTickDelta.invoke(applier, partialTick);
+            if (!(boolean) methods.isActive.invoke(applier)) return new Matrix4f();
+            Object position = methods.transform.invoke(applier, "body", methods.positionType, methods.zeroVector);
+            Object rotation = methods.transform.invoke(applier, "body", methods.rotationType, methods.zeroVector);
+            float x = component(position, methods.getX);
+            float y = component(position, methods.getY);
+            float z = component(position, methods.getZ);
+            float xRot = component(rotation, methods.getX);
+            float yRot = component(rotation, methods.getY);
+            float zRot = component(rotation, methods.getZ);
+            return new Matrix4f().translation(x, y + 0.7F, z)
+                    .rotateZ(zRot).rotateY(yRot).rotateX(xRot)
+                    .translate(0.0F, -0.7F, 0.0F);
+        } catch (IllegalAccessException | InvocationTargetException | RuntimeException ignored) {
+            return new Matrix4f();
+        }
+    }
+
     private static Object applier(LivingEntity entity) {
         Optional<EntityAccess> access = ENTITY_ACCESS.get(entity.getClass());
         if (access.isEmpty()) return null;
@@ -127,11 +128,6 @@ public final class PlayerAnimationCompat {
         } catch (IllegalAccessException | InvocationTargetException | RuntimeException ignored) {
             return null;
         }
-    }
-
-    private static void update(ApplierAccess access, Object applier, String name, ModelPart part)
-            throws InvocationTargetException, IllegalAccessException {
-        access.updatePart.invoke(applier, name, part);
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -145,7 +141,7 @@ public final class PlayerAnimationCompat {
     }
 
     private record EntityAccess(Method getter) {}
-    private record ApplierAccess(Method setTickDelta, Method isActive, Method updatePart,
-                                 Method transform, Object positionType, Object rotationType,
+    private record ApplierAccess(Method setTickDelta, Method isActive, Method transform,
+                                 Object positionType, Object rotationType,
                                  Object zeroVector, Method getX, Method getY, Method getZ) {}
 }

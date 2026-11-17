@@ -54,6 +54,7 @@ public final class CrowdShader implements AutoCloseable {
             layout(location=11) in vec3 aBindPivot;
             layout(location=12) in float iPoseIndex;
             layout(location=13) in float iScale;
+            layout(location=14) in vec4 iMountMotion;
 
             uniform mat4 uProjection;
             uniform mat4 uView;
@@ -70,16 +71,17 @@ public final class CrowdShader implements AutoCloseable {
             out float vHurt;
 
             mat3 rotY(float a) { float c=cos(a), s=sin(a); return mat3(c,0,-s, 0,1,0, s,0,c); }
+            mat3 rotX(float a) { float c=cos(a), s=sin(a); return mat3(1,0,0, 0,c,s, 0,-s,c); }
             mat3 rotZ(float a) { float c=cos(a), s=sin(a); return mat3(c,s,0, -s,c,0, 0,0,1); }
 
             bool exactPose(int bone) {
                 int pose = int(floor(iPoseIndex + 0.5));
-                return uAnimationEnabled >= 0.5 && pose >= 0 && pose < uPoseCount && bone >= 0 && bone < 16;
+                return uAnimationEnabled >= 0.5 && pose >= 0 && pose < uPoseCount && bone >= 0 && bone < 17;
             }
 
             void applyExactPose(int bone, inout vec3 position, inout vec3 normal) {
                 int pose = int(floor(iPoseIndex + 0.5));
-                int texel = pose * 64 + bone * 4;
+                int texel = pose * 68 + bone * 4;
                 vec3 c0 = texelFetch(uPoseBuffer, texel).xyz;
                 vec3 c1 = texelFetch(uPoseBuffer, texel + 1).xyz;
                 vec3 c2 = texelFetch(uPoseBuffer, texel + 2).xyz;
@@ -100,16 +102,22 @@ public final class CrowdShader implements AutoCloseable {
                 vec3 p = vec3(-modelPosition.x, -modelPosition.y + 1.5, modelPosition.z);
                 vec3 n = vec3(-modelNormal.x, -modelNormal.y, modelNormal.z);
                 p *= iScale;
+                if (exact) {
+                    applyExactPose(16, p, n);
+                }
                 if (iAnimation == 8.0) {
                     float death = clamp(sqrt(max(((iPhase - 1.0) / 20.0) * 1.6, 0.0)), 0.0, 1.0);
                     p = rotZ(death * 1.5707963) * p;
                 }
                 mat3 facing = rotY(iYaw);
-                vec3 world = iPosition + facing * p;
+                mat3 mount = rotY(iMountMotion.x) * rotX(-iMountMotion.y)
+                        * rotZ(iMountMotion.z) * rotY(-iMountMotion.x);
+                vec3 rootNormal = mount * facing * n;
+                vec3 world = iPosition + mount * (vec3(0.0, iMountMotion.w, 0.0) + facing * p);
                 vec4 viewPosition = uView * vec4(world - uCamera, 1.0);
                 gl_Position = uProjection * viewPosition;
                 vUv = aUv;
-                vNormal = normalize(facing * n);
+                vNormal = normalize(rootNormal);
                 vColor = aColor * iColor;
                 vLight = clamp(max(iLight.x, iLight.y), 0.12, 1.0);
                 vFogDistance = length(viewPosition.xyz);

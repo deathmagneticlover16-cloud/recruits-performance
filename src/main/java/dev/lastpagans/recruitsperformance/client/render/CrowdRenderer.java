@@ -18,6 +18,7 @@ import dev.lastpagans.recruitsperformance.client.scene.MeshKey;
 import dev.lastpagans.recruitsperformance.client.scene.PoseData;
 import dev.lastpagans.recruitsperformance.client.scene.RecruitVisualLayers;
 import dev.lastpagans.recruitsperformance.config.CrowdRendererConfig;
+import dev.lastpagans.recruitsperformance.runtime.RecruitIntrospector;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.model.HumanoidModel;
@@ -32,10 +33,10 @@ import org.joml.Matrix4f;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 
 import static org.lwjgl.opengl.GL11C.*;
 import static org.lwjgl.opengl.GL13C.GL_TEXTURE0;
@@ -51,13 +52,7 @@ public final class CrowdRenderer {
     private final Set<Integer> submittedEntities = new HashSet<>();
     private final Set<String> warnedConversions = new HashSet<>();
     private final List<PoseData> poses = new ArrayList<>();
-    private final Map<HumanoidPoseEvaluator.PoseKey, Integer> framePoseIndices = new HashMap<>();
-    private final Map<HumanoidPoseEvaluator.PoseKey, PoseData> posePalette = new LinkedHashMap<>(256, 0.75F, true) {
-        @Override
-        protected boolean removeEldestEntry(Map.Entry<HumanoidPoseEvaluator.PoseKey, PoseData> eldest) {
-            return size() > 2048;
-        }
-    };
+    private final Map<LivingEntity, CachedPose> poseCache = new WeakHashMap<>();
     private final List<Nameplate> nameplates = new ArrayList<>();
     private MeshCache cache;
     private CrowdShader shader;
@@ -106,7 +101,7 @@ public final class CrowdRenderer {
                 if (layer == null) throw new IllegalStateException("Recruits visual layer produced no geometry: " + layerTexture);
                 add(layer, instance.tinted(layer.tint()));
             }
-            for (MeshHandle equipment : cache.equipment(entity, model, fullDetail, cruorDetail)) {
+            for (MeshHandle equipment : cache.equipment(entity, renderer, model, fullDetail, cruorDetail)) {
                 add(equipment, instance.tinted(equipment.tint()));
             }
             queueNameplate(entity, partialTick, packedLight, distanceSquared);
@@ -144,7 +139,6 @@ public final class CrowdRenderer {
                 if (handle == null) throw new IllegalStateException("Icy horse tack produced no geometry");
                 add(handle, instance.tinted(handle.tint()));
             }
-            queueNameplate(horse, partialTick, packedLight, distanceSquared);
             submittedEntities.add(horse.getId());
             return true;
         } catch (Throwable conversionFailure) {
@@ -218,7 +212,6 @@ public final class CrowdRenderer {
             batches.clear();
             submittedEntities.clear();
             poses.clear();
-            framePoseIndices.clear();
             nameplates.clear();
             fallbacks = 0;
         }
@@ -229,8 +222,7 @@ public final class CrowdRenderer {
             batches.clear();
             submittedEntities.clear();
             poses.clear();
-            framePoseIndices.clear();
-            posePalette.clear();
+            poseCache.clear();
             nameplates.clear();
             if (cache != null) cache.close();
             if (shader != null) shader.close();
@@ -273,17 +265,10 @@ public final class CrowdRenderer {
     }
 
     private int poseIndex(HumanoidModel<LivingEntity> model, LivingEntity entity, float partialTick) {
-        HumanoidPoseEvaluator.PoseKey key = HumanoidPoseEvaluator.cacheKey(model, entity, partialTick);
-        Integer existing = framePoseIndices.get(key);
-        if (existing != null) return existing;
-        PoseData pose = posePalette.get(key);
-        if (pose == null) {
-            pose = HumanoidPoseEvaluator.evaluate(model, entity, partialTick);
-            posePalette.put(key, pose);
-        }
+        CachedPose cached = poseCache.computeIfAbsent(entity, ignored -> new CachedPose());
+        PoseData pose = cached.sample(model, entity, partialTick);
         int index = poses.size();
         poses.add(pose);
-        framePoseIndices.put(key, index);
         return index;
     }
 
@@ -293,6 +278,7 @@ public final class CrowdRenderer {
     }
 
     private void queueNameplate(LivingEntity entity, float partialTick, int packedLight, double distanceSquared) {
+        if (!RecruitIntrospector.isRecruit(entity)) return;
         double range = entity.isDiscrete() ? 32.0D : 64.0D;
         if (Minecraft.getInstance().crosshairPickEntity != entity || distanceSquared > range * range) return;
         nameplates.add(new Nameplate(entity.getDisplayName(),
@@ -343,4 +329,27 @@ public final class CrowdRenderer {
 
     private record Nameplate(Component text, double x, double y, double z,
                              boolean discrete, int packedLight) {}
+
+    private static final class CachedPose {
+        private HumanoidModel<LivingEntity> model;
+        private int tick = Integer.MIN_VALUE;
+        private PoseData start;
+        private PoseData end;
+        private PoseData interpolated;
+
+        private PoseData sample(HumanoidModel<LivingEntity> source, LivingEntity entity, float partialTick) {
+            if (model != source || tick != entity.tickCount) {
+                boolean consecutive = model == source && end != null && entity.tickCount == tick + 1;
+                model = source;
+                tick = entity.tickCount;
+                start = consecutive ? end : HumanoidPoseEvaluator.evaluate(source, entity, 0.0F);
+                end = HumanoidPoseEvaluator.evaluate(source, entity, 1.0F);
+                if (interpolated == null) {
+                    interpolated = new PoseData(new float[PoseData.BONE_COUNT * PoseData.FLOATS_PER_BONE]);
+                }
+            }
+            PoseData.interpolate(start, end, partialTick, interpolated);
+            return interpolated;
+        }
+    }
 }
