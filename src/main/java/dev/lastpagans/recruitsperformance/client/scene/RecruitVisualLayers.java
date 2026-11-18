@@ -24,7 +24,7 @@ public final class RecruitVisualLayers {
 
     private RecruitVisualLayers() {}
 
-    public static List<ResourceLocation> textures(LivingEntity entity, ResourceLocation baseTexture) {
+    public static List<VisualLayer> layers(LivingEntity entity, ResourceLocation baseTexture) {
         String path = baseTexture.getPath();
         String family;
         if (path.contains("/human/")) family = "human";
@@ -33,17 +33,21 @@ public final class RecruitVisualLayers {
 
         Accessors accessors = ACCESSORS.computeIfAbsent(entity.getClass(), Accessors::new);
         int biome = invokeIndex(accessors.biome, entity, BIOMES.length, "biome");
-        List<ResourceLocation> result = new ArrayList<>(3);
-        result.add(texture("textures/entity/" + family + "/biome/" + family + "_" + BIOMES[biome] + ".png"));
-
+        List<VisualLayer> result = new ArrayList<>(3);
+        // Recruits registers team/base cloth before its biome pass; preserve that exact order.
         if (entity.getTeam() == null) {
-            result.add(texture("textures/entity/" + family + "/" + family + "_base_cloth.png"));
+            result.add(new VisualLayer(texture("textures/entity/" + family + "/" + family
+                    + "_base_cloth.png"), MeshKey.Kind.BODY_TEAM));
         } else {
             int color = invokeIndex(accessors.color, entity, COLORS.length, "team color");
-            result.add(texture("textures/entity/" + family + "/" + family + "_team_" + COLORS[color] + ".png"));
+            result.add(new VisualLayer(texture("textures/entity/" + family + "/" + family + "_team_"
+                    + COLORS[color] + ".png"), MeshKey.Kind.BODY_TEAM));
         }
+        result.add(new VisualLayer(texture("textures/entity/" + family + "/biome/" + family + "_"
+                + BIOMES[biome] + ".png"), MeshKey.Kind.BODY_BIOME));
         if (accessors.companion) {
-            result.add(texture("textures/entity/" + family + "/" + family + "_assassin_cloth.png"));
+            result.add(new VisualLayer(texture("textures/entity/" + family + "/" + family
+                    + "_assassin_cloth.png"), MeshKey.Kind.BODY_COMPANION));
         }
         return result;
     }
@@ -90,4 +94,6 @@ public final class RecruitVisualLayers {
             }
         }
     }
+
+    public record VisualLayer(ResourceLocation texture, MeshKey.Kind kind) {}
 }

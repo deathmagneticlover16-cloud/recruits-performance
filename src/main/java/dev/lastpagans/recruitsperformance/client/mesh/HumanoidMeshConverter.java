@@ -26,11 +26,20 @@ public final class HumanoidMeshConverter {
     }
 
     public static MeshData convert(HumanoidModel<?> model, boolean fullDetail) {
+        return convert(model, model, fullDetail);
+    }
+
+    /** Captures a layer in its parent model's bind pose, matching HumanoidModel.copyPropertiesTo. */
+    public static MeshData convertAttached(HumanoidModel<?> model, HumanoidModel<?> parent) {
+        return convert(model, parent, true);
+    }
+
+    private static MeshData convert(HumanoidModel<?> model, HumanoidModel<?> bindModel, boolean fullDetail) {
         MeshData.Builder builder = new MeshData.Builder();
         CaptureVertexConsumer consumer = new CaptureVertexConsumer(builder);
         List<SavedPose> poses = save(model);
         try {
-            poses.forEach(saved -> saved.part.loadPose(saved.part.getInitialPose()));
+            loadBindPose(model, bindModel);
             capture(model.head, HEAD, consumer);
             if (fullDetail) capture(model.hat, HEAD, consumer);
             capture(model.body, BODY, consumer);
@@ -42,6 +51,16 @@ public final class HumanoidMeshConverter {
             poses.forEach(saved -> saved.part.loadPose(saved.pose));
         }
         return builder.buildQuads();
+    }
+
+    private static void loadBindPose(HumanoidModel<?> model, HumanoidModel<?> bindModel) {
+        model.head.loadPose(bindModel.head.getInitialPose());
+        model.hat.loadPose(bindModel.hat.getInitialPose());
+        model.body.loadPose(bindModel.body.getInitialPose());
+        model.rightArm.loadPose(bindModel.rightArm.getInitialPose());
+        model.leftArm.loadPose(bindModel.leftArm.getInitialPose());
+        model.rightLeg.loadPose(bindModel.rightLeg.getInitialPose());
+        model.leftLeg.loadPose(bindModel.leftLeg.getInitialPose());
     }
 
     private static void capture(ModelPart part, int bone, CaptureVertexConsumer consumer) {

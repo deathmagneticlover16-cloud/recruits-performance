@@ -3,11 +3,10 @@ package dev.lastpagans.recruitsperformance.client.mesh;
 import dev.lastpagans.recruitsperformance.client.gpu.GpuMesh;
 import dev.lastpagans.recruitsperformance.client.compat.CruorCompat;
 import dev.lastpagans.recruitsperformance.client.compat.EpicKnightsCompat;
+import dev.lastpagans.recruitsperformance.client.compat.HumanoidArmorCompat;
 import dev.lastpagans.recruitsperformance.client.scene.MeshKey;
 import dev.lastpagans.recruitsperformance.config.CrowdRendererConfig;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.HumanoidModel;
-import net.minecraft.client.model.geom.ModelLayers;
 import net.minecraft.client.renderer.Sheets;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.texture.TextureAtlas;
@@ -43,8 +42,6 @@ public final class MeshCache implements AutoCloseable {
 
     private final LinkedHashMap<String, GpuMesh> meshes = new LinkedHashMap<>(64, 0.75F, true);
     private final Set<String> equipmentMeshes = new java.util.HashSet<>();
-    private HumanoidModel<LivingEntity> innerArmor;
-    private HumanoidModel<LivingEntity> outerArmor;
 
     public MeshHandle body(HumanoidModel<?> model, ResourceLocation texture, boolean fullDetail) {
         String geometry = model.getClass().getName() + (fullDetail ? ":full" : ":lod");
@@ -53,8 +50,12 @@ public final class MeshCache implements AutoCloseable {
                 () -> HumanoidMeshConverter.convert(model, fullDetail));
     }
 
-    public MeshHandle bodyLayer(HumanoidModel<?> model, ResourceLocation texture, boolean fullDetail) {
-        return body(model, texture, fullDetail);
+    public MeshHandle bodyLayer(HumanoidModel<?> model, ResourceLocation texture, MeshKey.Kind kind,
+                                boolean fullDetail) {
+        String geometry = model.getClass().getName() + (fullDetail ? ":full" : ":lod");
+        MeshKey key = new MeshKey(geometry, texture, -1, kind);
+        return handle(key, geometry, texture, 0xFFFFFFFF, false,
+                () -> HumanoidMeshConverter.convert(model, fullDetail));
     }
 
     public MeshHandle horse(Object model, ResourceLocation texture, int tint, MeshKey.Kind kind,
@@ -75,10 +76,10 @@ public final class MeshCache implements AutoCloseable {
         }
         List<MeshHandle> result = new ArrayList<>(6);
         EpicKnightsCompat.Layer epicLayer = EpicKnightsCompat.layer(renderer);
-        armor(entity, EquipmentSlot.HEAD, epicLayer, result);
-        armor(entity, EquipmentSlot.CHEST, epicLayer, result);
-        armor(entity, EquipmentSlot.LEGS, epicLayer, result);
-        armor(entity, EquipmentSlot.FEET, epicLayer, result);
+        armor(entity, renderer, bodyModel, EquipmentSlot.HEAD, epicLayer, result);
+        armor(entity, renderer, bodyModel, EquipmentSlot.CHEST, epicLayer, result);
+        armor(entity, renderer, bodyModel, EquipmentSlot.LEGS, epicLayer, result);
+        armor(entity, renderer, bodyModel, EquipmentSlot.FEET, epicLayer, result);
         if (!fullDetail) return result;
         boolean mainUsesLeftArm = entity.getMainArm() == HumanoidArm.LEFT;
         item(entity, entity.getMainHandItem(), mainUsesLeftArm, MeshKey.Kind.MAIN_HAND,
@@ -116,17 +117,16 @@ public final class MeshCache implements AutoCloseable {
         meshes.values().forEach(GpuMesh::close);
         meshes.clear();
         equipmentMeshes.clear();
-        innerArmor = null;
-        outerArmor = null;
     }
 
-    private void armor(LivingEntity entity, EquipmentSlot slot, EpicKnightsCompat.Layer epicLayer,
-                       List<MeshHandle> result) {
+    private void armor(LivingEntity entity, LivingEntityRenderer<?, ?> renderer,
+                       HumanoidModel<?> bodyModel, EquipmentSlot slot,
+                       EpicKnightsCompat.Layer epicLayer, List<MeshHandle> result) {
         ItemStack stack = entity.getItemBySlot(slot);
         if (!(stack.getItem() instanceof ArmorItem armor)) return;
         if (stack.hasFoil()) throw new IllegalStateException("Foil armor requires the vanilla glint pass");
         ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(stack.getItem());
-        HumanoidModel<LivingEntity> fallback = defaultArmor(slot);
+        HumanoidModel<?> fallback = HumanoidArmorCompat.model(renderer, slot);
         HumanoidModel<?> model;
         try {
             model = IClientItemExtensions.of(stack).getHumanoidArmorModel(entity, stack, slot, fallback);
@@ -137,24 +137,29 @@ public final class MeshCache implements AutoCloseable {
         String baseTexture = armorTexture(armor, slot);
         String resolvedTexture = ForgeHooksClient.getArmorTexture(entity, stack, baseTexture, slot, null);
         ResourceLocation texture = new ResourceLocation(resolvedTexture);
-        MeshKey key = new MeshKey(itemId + ":" + slot.getName() + ":" + model.getClass().getName(),
+        String geometry = itemId + ":" + slot.getName() + ":" + model.getClass().getName() + ":"
+                + Integer.toHexString(System.identityHashCode(model)) + ":parent:"
+                + bodyModel.getClass().getName() + ":"
+                + Integer.toHexString(System.identityHashCode(bodyModel));
+        MeshKey key = new MeshKey(geometry,
                 texture, -1, MeshKey.Kind.ARMOR);
         int tint = stack.getItem() instanceof DyeableLeatherItem dyeable
                 ? 0xFF000000 | dyeable.getColor(stack) : 0xFFFFFFFF;
         HumanoidModel<?> captured = model;
-        MeshHandle handle = handle(key, key.geometry(), texture, tint, true, () -> captureArmor(captured, slot));
+        MeshHandle handle = handle(key, key.geometry(), texture, tint, true,
+                () -> captureArmor(captured, bodyModel, slot));
         if (handle == null) throw new IllegalStateException("Armor model produced no geometry: " + itemId);
         result.add(handle);
         if (stack.getItem() instanceof DyeableLeatherItem) {
             String overlayTexture = ForgeHooksClient.getArmorTexture(entity, stack, baseTexture, slot, "overlay");
             ResourceLocation overlay = new ResourceLocation(overlayTexture);
-            MeshKey overlayKey = new MeshKey(key.geometry(), overlay, -1, MeshKey.Kind.ARMOR);
+            MeshKey overlayKey = new MeshKey(key.geometry(), overlay, -1, MeshKey.Kind.ARMOR_OVERLAY);
             MeshHandle overlayHandle = handle(overlayKey, key.geometry(), overlay, 0xFFFFFFFF, true,
-                    () -> captureArmor(captured, slot));
+                    () -> captureArmor(captured, bodyModel, slot));
             if (overlayHandle == null) throw new IllegalStateException("Armor overlay produced no geometry: " + itemId);
             result.add(overlayHandle);
         }
-        decorations(stack, epicLayer, result);
+        decorations(stack, epicLayer, bodyModel, result);
     }
 
     private void item(LivingEntity entity, ItemStack stack, boolean left, MeshKey.Kind kind,
@@ -207,15 +212,15 @@ public final class MeshCache implements AutoCloseable {
             meshes.put(geometry, mesh);
             if (equipment) equipmentMeshes.add(geometry);
         }
-        boolean cull = key.kind() == MeshKey.Kind.BODY
-                || key.kind() == MeshKey.Kind.MAIN_HAND
+        boolean cull = key.kind() == MeshKey.Kind.MAIN_HAND
                 || key.kind() == MeshKey.Kind.OFF_HAND
                 || key.kind() == MeshKey.Kind.HORSE_BODY
                 || key.kind() == MeshKey.Kind.IMPOSTOR;
         return new MeshHandle(key, mesh, texture, tint, equipment, cull);
     }
 
-    private void decorations(ItemStack stack, EpicKnightsCompat.Layer epicLayer, List<MeshHandle> result) {
+    private void decorations(ItemStack stack, EpicKnightsCompat.Layer epicLayer,
+                             HumanoidModel<?> bodyModel, List<MeshHandle> result) {
         CompoundTag decorationRoot = stack.getTagElement("ArmorDecoration");
         if (decorationRoot != null) {
             if (epicLayer == null) {
@@ -225,7 +230,8 @@ public final class MeshCache implements AutoCloseable {
             for (int index = 0; index < items.size(); index++) {
                 CompoundTag entry = items.getCompound(index);
                 ResourceLocation location = decorationLocation(entry.getString("name"));
-                addDecoration(epicLayer, location, entry.getBoolean("dyeable"), entry.getInt("color"), result);
+                addDecoration(epicLayer, bodyModel, location, entry.getBoolean("dyeable"),
+                        entry.getInt("color"), result);
             }
         }
         if (stack.getItem() instanceof ArmorItem armor && armor.getEquipmentSlot() == EquipmentSlot.CHEST
@@ -233,35 +239,36 @@ public final class MeshCache implements AutoCloseable {
             if (epicLayer == null) {
                 throw new IllegalStateException("Epic Knights surcoat data exists without its renderer layer");
             }
-            addSurcoat(epicLayer, result);
+            addSurcoat(epicLayer, bodyModel, result);
             List<Pair<Holder<BannerPattern>, DyeColor>> patterns = BannerBlockEntity.createPatterns(
                     ShieldItem.getColor(stack), BannerBlockEntity.getItemPatterns(stack));
             for (Pair<Holder<BannerPattern>, DyeColor> pattern : patterns) {
                 pattern.getFirst().unwrapKey().ifPresent(key ->
-                        addSurcoatPattern(epicLayer, key.location(), pattern.getSecond(), result));
+                        addSurcoatPattern(epicLayer, bodyModel, key.location(), pattern.getSecond(), result));
             }
         }
     }
 
-    private void addSurcoat(EpicKnightsCompat.Layer layer, List<MeshHandle> result) {
+    private void addSurcoat(EpicKnightsCompat.Layer layer, HumanoidModel<?> bodyModel,
+                            List<MeshHandle> result) {
         HumanoidModel<?> model = EpicKnightsCompat.coatModel(layer);
         String geometry = "epic-surcoat:" + model.getClass().getName() + ":"
                 + Integer.toHexString(System.identityHashCode(model));
         ResourceLocation texture = EpicKnightsCompat.baseTexture(layer);
         MeshKey key = new MeshKey(geometry, texture, -1, MeshKey.Kind.DECORATION);
         MeshHandle handle = handle(key, geometry, texture, 0xFFFFFFFF, true,
-                () -> HumanoidMeshConverter.convert(model));
+                () -> HumanoidMeshConverter.convertAttached(model, bodyModel));
         if (handle == null) throw new IllegalStateException("Epic Knights surcoat model produced no geometry");
         result.add(handle);
     }
 
-    private void addSurcoatPattern(EpicKnightsCompat.Layer layer, ResourceLocation pattern, DyeColor color,
-                                   List<MeshHandle> result) {
+    private void addSurcoatPattern(EpicKnightsCompat.Layer layer, HumanoidModel<?> bodyModel,
+                                   ResourceLocation pattern, DyeColor color, List<MeshHandle> result) {
         HumanoidModel<?> model = EpicKnightsCompat.coatModel(layer);
         String geometry = "epic-surcoat:" + model.getClass().getName() + ":"
                 + Integer.toHexString(System.identityHashCode(model));
         ResourceLocation texture = EpicKnightsCompat.patternTexture(layer, pattern);
-        MeshKey key = new MeshKey(geometry, texture, -1, MeshKey.Kind.DECORATION);
+        MeshKey key = new MeshKey(geometry, texture, -1, MeshKey.Kind.DECORATION_OVERLAY);
         float[] rgb = color.getTextureDiffuseColors();
         int tint = 0xFF000000 | ((int) (rgb[0] * 255.0F) << 16)
                 | ((int) (rgb[1] * 255.0F) << 8) | (int) (rgb[2] * 255.0F);
@@ -270,8 +277,9 @@ public final class MeshCache implements AutoCloseable {
         result.add(patternHandle);
     }
 
-    private void addDecoration(EpicKnightsCompat.Layer layer, ResourceLocation location, boolean dyeable,
-                               int color, List<MeshHandle> result) {
+    private void addDecoration(EpicKnightsCompat.Layer layer, HumanoidModel<?> bodyModel,
+                               ResourceLocation location, boolean dyeable, int color,
+                               List<MeshHandle> result) {
         HumanoidModel<?> model = EpicKnightsCompat.decorationModel(layer, location);
         String geometry = "epic-decoration:" + location + ":" + model.getClass().getName() + ":"
                 + Integer.toHexString(System.identityHashCode(model));
@@ -279,12 +287,12 @@ public final class MeshCache implements AutoCloseable {
         MeshKey key = new MeshKey(geometry, texture, -1, MeshKey.Kind.DECORATION);
         int tint = dyeable ? 0xFF000000 | color : 0xFFFFFFFF;
         MeshHandle base = handle(key, geometry, texture, tint, true,
-                () -> HumanoidMeshConverter.convert(model));
+                () -> HumanoidMeshConverter.convertAttached(model, bodyModel));
         if (base == null) throw new IllegalStateException("Epic Knights decoration produced no geometry: " + location);
         result.add(base);
         if (dyeable) {
             ResourceLocation overlay = EpicKnightsCompat.texture(layer, location, true);
-            MeshKey overlayKey = new MeshKey(geometry, overlay, -1, MeshKey.Kind.DECORATION);
+            MeshKey overlayKey = new MeshKey(geometry, overlay, -1, MeshKey.Kind.DECORATION_OVERLAY);
             MeshHandle overlayHandle = handle(overlayKey, geometry, overlay, 0xFFFFFFFF, true,
                     () -> { throw new IllegalStateException("Missing shared Epic Knights decoration geometry: " + location); });
             result.add(overlayHandle);
@@ -297,16 +305,8 @@ public final class MeshCache implements AutoCloseable {
                 ? new ResourceLocation("magistuarmory", parsed.getPath()) : parsed;
     }
 
-    @SuppressWarnings("unchecked")
-    private HumanoidModel<LivingEntity> defaultArmor(EquipmentSlot slot) {
-        if (innerArmor == null) {
-            innerArmor = new HumanoidModel<>(Minecraft.getInstance().getEntityModels().bakeLayer(ModelLayers.PLAYER_INNER_ARMOR));
-            outerArmor = new HumanoidModel<>(Minecraft.getInstance().getEntityModels().bakeLayer(ModelLayers.PLAYER_OUTER_ARMOR));
-        }
-        return slot == EquipmentSlot.LEGS ? innerArmor : outerArmor;
-    }
-
-    private static MeshData captureArmor(HumanoidModel<?> model, EquipmentSlot slot) {
+    private static MeshData captureArmor(HumanoidModel<?> model, HumanoidModel<?> bodyModel,
+                                         EquipmentSlot slot) {
         boolean[] visible = visibility(model);
         try {
             model.setAllVisible(false);
@@ -317,7 +317,7 @@ public final class MeshCache implements AutoCloseable {
                 case FEET -> { model.leftLeg.visible = true; model.rightLeg.visible = true; }
                 default -> { }
             }
-            return HumanoidMeshConverter.convert(model);
+            return HumanoidMeshConverter.convertAttached(model, bodyModel);
         } finally {
             restoreVisibility(model, visible);
         }

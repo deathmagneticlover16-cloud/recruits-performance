@@ -1,3 +1,13 @@
+# 1.0.0 Alpha 8
+
+- Fixed the Oculus multi-pass cancellation bug: once a recruit is submitted to the frame's instanced batch, every repeated shader/shadow source-renderer pass remains cancelled instead of restoring vanilla body and armor rendering.
+- Cached per-frame conversion failures so an unsupported entity is not reconverted once for every Oculus pass.
+- Added deterministic source-renderer layer ordering for base bodies, armor, dye overlays, Recruits team/biome/companion materials, held items, Epic Knights decorations and heraldry.
+- Matched the no-cull state used by Recruits body/material layers so reverse-wound and two-sided skin geometry is retained.
+- Resolved the actual inner and outer models from each Recruits `HumanoidArmorLayer` rather than substituting player armor models.
+- Captured armor and Epic Knights addon decorations in the parent recruit model's bind pose, matching the source renderer's `copyPropertiesTo` attachment contract.
+- Bumped the mod to `1.0.0-alpha.8`.
+
 # 1.0.0 Alpha 7
 
 - Restricted the hover nameplate queue to Villager Recruits entities and removed mounted horses from the label path.

@@ -31,8 +31,9 @@ import net.minecraftforge.client.event.RenderLevelStageEvent;
 import org.joml.Matrix4f;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -48,8 +49,9 @@ import static org.lwjgl.opengl.GL30C.glBindVertexArray;
 public final class CrowdRenderer {
     private static final CrowdRenderer INSTANCE = new CrowdRenderer();
 
-    private final Map<MeshKey, Batch> batches = new HashMap<>();
+    private final Map<MeshKey, Batch> batches = new LinkedHashMap<>();
     private final Set<Integer> submittedEntities = new HashSet<>();
+    private final Set<Integer> fallbackEntities = new HashSet<>();
     private final Set<String> warnedConversions = new HashSet<>();
     private final List<PoseData> poses = new ArrayList<>();
     private final Map<LivingEntity, CachedPose> poseCache = new WeakHashMap<>();
@@ -65,7 +67,11 @@ public final class CrowdRenderer {
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     public boolean submit(LivingEntity entity, LivingEntityRenderer renderer, float partialTick, int packedLight) {
-        if (!CrowdRendererConfig.enabled.get() || failed || submittedEntities.contains(entity.getId())) return false;
+        if (!CrowdRendererConfig.enabled.get() || failed) return false;
+        // Oculus renders living entities in more than one world/shadow pass. Once an entity is in
+        // this frame's GPU batch, every repeated source-renderer pass must remain cancelled.
+        if (submittedEntities.contains(entity.getId())) return true;
+        if (fallbackEntities.contains(entity.getId())) return false;
         if (entity.isInvisible() || entity.isCurrentlyGlowing()) return false;
         if (submittedEntities.size() >= CrowdRendererConfig.maximumInstances.get()) return false;
         Minecraft minecraft = Minecraft.getInstance();
@@ -78,6 +84,7 @@ public final class CrowdRenderer {
             return submitHorse(entity, renderer, sourceModel, partialTick, packedLight, distanceSquared);
         }
         if (!(sourceModel instanceof HumanoidModel<?> model)) {
+            fallbackEntities.add(entity.getId());
             fallbacks++;
             return false;
         }
@@ -96,9 +103,10 @@ public final class CrowdRenderer {
                     ? poseIndex((HumanoidModel<LivingEntity>) model, entity, partialTick) : -1;
             InstanceData instance = InstanceData.from(entity, partialTick, packedLight, poseIndex, modelScale);
             add(body, instance.tinted(body.tint()));
-            for (ResourceLocation layerTexture : RecruitVisualLayers.textures(entity, texture)) {
-                MeshHandle layer = cache.bodyLayer(model, layerTexture, fullDetail);
-                if (layer == null) throw new IllegalStateException("Recruits visual layer produced no geometry: " + layerTexture);
+            for (RecruitVisualLayers.VisualLayer visualLayer : RecruitVisualLayers.layers(entity, texture)) {
+                MeshHandle layer = cache.bodyLayer(model, visualLayer.texture(), visualLayer.kind(), fullDetail);
+                if (layer == null) throw new IllegalStateException("Recruits visual layer produced no geometry: "
+                        + visualLayer.texture());
                 add(layer, instance.tinted(layer.tint()));
             }
             for (MeshHandle equipment : cache.equipment(entity, renderer, model, fullDetail, cruorDetail)) {
@@ -114,6 +122,7 @@ public final class CrowdRenderer {
                         entity.getType(), conversionFailure);
             }
             removeEntity(entity.getId());
+            fallbackEntities.add(entity.getId());
             fallbacks++;
             return false;
         }
@@ -148,6 +157,7 @@ public final class CrowdRenderer {
                         horse.getType(), conversionFailure);
             }
             removeEntity(horse.getId());
+            fallbackEntities.add(horse.getId());
             fallbacks++;
             return false;
         }
@@ -182,7 +192,10 @@ public final class CrowdRenderer {
 
             glActiveTexture(GL_TEXTURE0);
             gpuTimer.begin();
-            for (Batch batch : batches.values()) {
+            List<Batch> orderedBatches = new ArrayList<>(batches.values());
+            orderedBatches.sort(Comparator.comparingInt(
+                    batch -> batch.handle.key().kind().renderOrder()));
+            for (Batch batch : orderedBatches) {
                 if (batch.instances.isEmpty()) continue;
                 if (batch.handle.cull()) RenderSystem.enableCull(); else RenderSystem.disableCull();
                 batch.handle.mesh().upload(batch.instances);
@@ -211,6 +224,7 @@ public final class CrowdRenderer {
                     elapsed, gpuTimer == null ? 0 : gpuTimer.lastNanos());
             batches.clear();
             submittedEntities.clear();
+            fallbackEntities.clear();
             poses.clear();
             nameplates.clear();
             fallbacks = 0;
@@ -221,6 +235,7 @@ public final class CrowdRenderer {
         Runnable close = () -> {
             batches.clear();
             submittedEntities.clear();
+            fallbackEntities.clear();
             poses.clear();
             poseCache.clear();
             nameplates.clear();
