@@ -1,3 +1,11 @@
+# 1.0.0 Alpha 9
+
+- Made Better Mob Combat and the Recruits renderer's native item poses authoritative over Recruits Serious Animations' overlapping fallback action/swing layer while sampling GPU poses; the foreign layer is restored immediately after each sample.
+- Sampled active Better Combat curves and `leftItem`/`rightItem` weapon channels at the real render partial tick instead of linearly blending a second pair of matrices over them.
+- Matched Minecraft's `LEQUAL` depth contract for coplanar body cloth, biome skins, armor dye overlays, Epic Knights decorations and heraldry, preventing later layers from disappearing based on stale Oculus/OpenGL state.
+- Retained the humanoid outer-skin/hat geometry at the geometry LOD boundary rather than dropping a real recruit material layer.
+- Bumped the mod to `1.0.0-alpha.9`.
+
 # 1.0.0 Alpha 8
 
 - Fixed the Oculus multi-pass cancellation bug: once a recruit is submitted to the frame's instanced batch, every repeated shader/shadow source-renderer pass remains cancelled instead of restoring vanilla body and armor rendering.

@@ -41,7 +41,10 @@ public final class HumanoidMeshConverter {
         try {
             loadBindPose(model, bindModel);
             capture(model.head, HEAD, consumer);
-            if (fullDetail) capture(model.hat, HEAD, consumer);
+            // The hat part is the second skin/robe layer on Recruits humanoids. It is material
+            // geometry, not an optional nametag-style detail, and dropping it breaks both skins
+            // and armor-adjacent layers at the LOD boundary.
+            capture(model.hat, HEAD, consumer);
             capture(model.body, BODY, consumer);
             capture(model.rightArm, RIGHT_ARM, consumer);
             capture(model.leftArm, LEFT_ARM, consumer);

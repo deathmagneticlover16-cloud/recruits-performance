@@ -3,9 +3,10 @@ package dev.lastpagans.recruitsperformance.client.render;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.lastpagans.recruitsperformance.RecruitsPerformance;
-import dev.lastpagans.recruitsperformance.client.diagnostics.CrowdDiagnostics;
+import dev.lastpagans.recruitsperformance.client.compat.BetterCombatCompat;
 import dev.lastpagans.recruitsperformance.client.compat.IcysHorsesCompat;
 import dev.lastpagans.recruitsperformance.client.compat.ShaderPackCompat;
+import dev.lastpagans.recruitsperformance.client.diagnostics.CrowdDiagnostics;
 import dev.lastpagans.recruitsperformance.client.gpu.CrowdShader;
 import dev.lastpagans.recruitsperformance.client.gpu.CrowdPoseBuffer;
 import dev.lastpagans.recruitsperformance.client.gpu.GpuFrameTimer;
@@ -183,6 +184,10 @@ public final class CrowdRenderer {
             poseBuffer.bind();
 
             RenderSystem.enableDepthTest();
+            // Body cloth, biome skins, armor dye overlays and Epic Knights decorations are
+            // intentionally coplanar source-renderer layers. Minecraft renders those with
+            // LEQUAL; inheriting LESS from an Oculus pass rejects every layer after the first.
+            RenderSystem.depthFunc(GL_LEQUAL);
             RenderSystem.depthMask(true);
             RenderSystem.enableCull();
             RenderSystem.enableBlend();
@@ -215,6 +220,7 @@ public final class CrowdRenderer {
             if (gpuTimer != null) gpuTimer.end();
             resetGpuState();
             RenderSystem.disableBlend();
+            RenderSystem.depthFunc(GL_LEQUAL);
             RenderSystem.enableCull();
             long elapsed = System.nanoTime() - started;
             CrowdDiagnostics.get().publish(submittedEntities.size(), submittedEntities.size(), batches.size(),
@@ -353,6 +359,17 @@ public final class CrowdRenderer {
         private PoseData interpolated;
 
         private PoseData sample(HumanoidModel<LivingEntity> source, LivingEntity entity, float partialTick) {
+            // Better Combat curves and item channels are already interpolated by Player Animation
+            // Library. Sampling their actual render tick avoids inventing a second interpolation,
+            // which visibly shears fast swings and held weapons.
+            if (BetterCombatCompat.hasActiveCombatAnimation(entity)) {
+                model = source;
+                tick = entity.tickCount;
+                PoseData exact = HumanoidPoseEvaluator.evaluate(source, entity, partialTick);
+                start = exact;
+                end = null;
+                return exact;
+            }
             if (model != source || tick != entity.tickCount) {
                 boolean consecutive = model == source && end != null && entity.tickCount == tick + 1;
                 model = source;

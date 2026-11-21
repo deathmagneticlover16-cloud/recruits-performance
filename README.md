@@ -6,7 +6,7 @@ The renderer converts the active Recruits humanoid `ModelPart` hierarchy into on
 
 Every body and equipment vertex carries a compact bone identifier. Exact GPU poses are uploaded as 3x4 skin matrices to a shared 17-bone pose buffer, with a dedicated whole-body animation slot. Body, armor and held-item instances reference one pose per entity, so they stay aligned without duplicating pose data per component. Geometry LODs omit secondary soldier and horse detail at long range while retaining their core silhouettes and material identity. Instances sharing a mesh and texture are submitted with `glDrawElementsInstanced`.
 
-Each recruit's native model and Mob Player Animator stack is sampled at stable tick endpoints and interpolated for the current render frame. This removes quantized pose snapping and avoids rerunning reflective animation extraction at monitor refresh rate while keeping every supported distance in the instanced path.
+Each recruit's native model and Mob Player Animator stack is sampled at stable tick endpoints and interpolated for the current render frame. Active Better Mob Combat poses are sampled at the real render partial tick so its fast attack curves and held-item channels are not interpolated a second time. While any pose sample is taken, Better Combat and the Recruits renderer's native item pose remain authoritative over Recruits Serious Animations' overlapping fallback action/swing layer. Every supported distance remains in the instanced path.
 
 ## Requirements
 
@@ -24,7 +24,7 @@ The compatibility baseline is Recruits 1.15.2, Recruits Serious Animations 0.13.
 ./gradlew clean build
 ```
 
-The distributable JAR is written to `build/libs/recruits-performance-1.20.1-1.0.0-alpha.8.jar`. The checked-in wrapper verifies Gradle 8.5 with its official SHA-256 checksum.
+The distributable JAR is written to `build/libs/recruits-performance-1.20.1-1.0.0-alpha.9.jar`. The checked-in wrapper verifies Gradle 8.5 with its official SHA-256 checksum.
 
 ## Install
 
@@ -39,7 +39,7 @@ Client settings are generated at `config/recruits-performance-client.toml`. The 
 - Hurt flashes and Better Mob Combat attacks use GPU overlay and animation states without leaving the instanced path.
 - When Iris/Oculus reports an active shader pack, the instanced crowd pass moves to `AFTER_LEVEL`; repeated Oculus entity and shadow passes remain cancelled after the entity's single GPU submission.
 - If a foreign model cannot produce reusable geometry, that entity keeps its original renderer and the fallback is reported. Equipment is never silently omitted.
-- The supported Recruits humanoid material adapter preserves the source renderer's deterministic team, biome and companion layer order and no-cull state; unknown Recruits body formats and custom-head items deliberately retain vanilla rendering.
+- The supported Recruits humanoid material adapter preserves the source renderer's deterministic team, biome and companion layer order, no-cull state and `LEQUAL` coplanar depth contract; unknown Recruits body formats and custom-head items deliberately retain vanilla rendering.
 - Body, helmet, chest, leg, boot, main-hand and off-hand geometry are cached separately, so mixed loadouts retain component batching.
 - Captured source-model bone rotations, Mob Player Animator whole-body motion, moving pivots and item channels are shared by body, armor and both held-item components through one pose index per entity.
 - Armor uses the inner/outer models installed on the live Recruits renderer. Epic Knights `ArmorDecoration` geometry, dye overlays and surcoat heraldry are obtained from its live registered layer and attached in the recruit model's bind pose, including models registered by installed addons.
