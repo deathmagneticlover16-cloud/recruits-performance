@@ -1,3 +1,11 @@
+# 1.0.0 Alpha 10
+
+- Replaced the direct `IClientItemExtensions#getHumanoidArmorModel` shortcut with Forge's complete `ForgeHooksClient#getArmorModel` pipeline, including the generic replacement-model property transfer used by Epic Knights and its addons.
+- Matched `HumanoidArmorLayer` setup by copying the active Recruits parent model into the renderer's real inner/outer armor model before resolving an item-specific replacement.
+- Kept armor slot masking confined to the seven humanoid roots so item-specific child geometry is preserved exactly while the equipped slot is captured.
+- Added per-model debug diagnostics containing the item, slot, resolved model class, captured vertex count and triangle count.
+- Bumped the mod to `1.0.0-alpha.10`.
+
 # 1.0.0 Alpha 9
 
 - Made Better Mob Combat and the Recruits renderer's native item poses authoritative over Recruits Serious Animations' overlapping fallback action/swing layer while sampling GPU poses; the foreign layer is restored immediately after each sample.

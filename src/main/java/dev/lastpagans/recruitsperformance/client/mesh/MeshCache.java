@@ -1,12 +1,14 @@
 package dev.lastpagans.recruitsperformance.client.mesh;
 
-import dev.lastpagans.recruitsperformance.client.gpu.GpuMesh;
+import dev.lastpagans.recruitsperformance.RecruitsPerformance;
 import dev.lastpagans.recruitsperformance.client.compat.CruorCompat;
 import dev.lastpagans.recruitsperformance.client.compat.EpicKnightsCompat;
 import dev.lastpagans.recruitsperformance.client.compat.HumanoidArmorCompat;
+import dev.lastpagans.recruitsperformance.client.gpu.GpuMesh;
 import dev.lastpagans.recruitsperformance.client.scene.MeshKey;
 import dev.lastpagans.recruitsperformance.config.CrowdRendererConfig;
 import net.minecraft.client.model.HumanoidModel;
+import net.minecraft.client.model.Model;
 import net.minecraft.client.renderer.Sheets;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.texture.TextureAtlas;
@@ -28,7 +30,6 @@ import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.block.entity.BannerBlockEntity;
 import net.minecraft.world.level.block.entity.BannerPattern;
 import net.minecraftforge.client.ForgeHooksClient;
-import net.minecraftforge.client.extensions.common.IClientItemExtensions;
 import com.mojang.datafixers.util.Pair;
 
 import java.util.ArrayList;
@@ -127,13 +128,22 @@ public final class MeshCache implements AutoCloseable {
         if (stack.hasFoil()) throw new IllegalStateException("Foil armor requires the vanilla glint pass");
         ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(stack.getItem());
         HumanoidModel<?> fallback = HumanoidArmorCompat.model(renderer, slot);
-        HumanoidModel<?> model;
+        Model resolved;
         try {
-            model = IClientItemExtensions.of(stack).getHumanoidArmorModel(entity, stack, slot, fallback);
+            // Mirror HumanoidArmorLayer exactly: copy the parent pose into the renderer's real
+            // inner/outer model, select the equipped slot, then invoke Forge's generic model hook.
+            // Calling getHumanoidArmorModel directly skips getGenericArmorModel, including the
+            // property transfer used by Epic Knights and other replacement armor models.
+            copyProperties(bodyModel, fallback);
+            setSlotVisibility(fallback, slot);
+            resolved = ForgeHooksClient.getArmorModel(entity, stack, slot, fallback);
         } catch (Throwable failure) {
             throw new IllegalStateException("Armor model adapter failed for " + itemId, failure);
         }
-        if (model == null) model = fallback;
+        if (!(resolved instanceof HumanoidModel<?> model)) {
+            throw new IllegalStateException("Armor model is not reusable humanoid geometry: "
+                    + itemId + " (" + (resolved == null ? "null" : resolved.getClass().getName()) + ")");
+        }
         String baseTexture = armorTexture(armor, slot);
         String resolvedTexture = ForgeHooksClient.getArmorTexture(entity, stack, baseTexture, slot, null);
         ResourceLocation texture = new ResourceLocation(resolvedTexture);
@@ -147,7 +157,7 @@ public final class MeshCache implements AutoCloseable {
                 ? 0xFF000000 | dyeable.getColor(stack) : 0xFFFFFFFF;
         HumanoidModel<?> captured = model;
         MeshHandle handle = handle(key, key.geometry(), texture, tint, true,
-                () -> captureArmor(captured, bodyModel, slot));
+                () -> captureArmor(captured, bodyModel, slot, itemId));
         if (handle == null) throw new IllegalStateException("Armor model produced no geometry: " + itemId);
         result.add(handle);
         if (stack.getItem() instanceof DyeableLeatherItem) {
@@ -155,7 +165,7 @@ public final class MeshCache implements AutoCloseable {
             ResourceLocation overlay = new ResourceLocation(overlayTexture);
             MeshKey overlayKey = new MeshKey(key.geometry(), overlay, -1, MeshKey.Kind.ARMOR_OVERLAY);
             MeshHandle overlayHandle = handle(overlayKey, key.geometry(), overlay, 0xFFFFFFFF, true,
-                    () -> captureArmor(captured, bodyModel, slot));
+                    () -> captureArmor(captured, bodyModel, slot, itemId));
             if (overlayHandle == null) throw new IllegalStateException("Armor overlay produced no geometry: " + itemId);
             result.add(overlayHandle);
         }
@@ -306,20 +316,42 @@ public final class MeshCache implements AutoCloseable {
     }
 
     private static MeshData captureArmor(HumanoidModel<?> model, HumanoidModel<?> bodyModel,
-                                         EquipmentSlot slot) {
+                                         EquipmentSlot slot, ResourceLocation itemId) {
         boolean[] visible = visibility(model);
         try {
-            model.setAllVisible(false);
-            switch (slot) {
-                case HEAD -> { model.head.visible = true; model.hat.visible = true; }
-                case CHEST -> { model.body.visible = true; model.leftArm.visible = true; model.rightArm.visible = true; }
-                case LEGS -> { model.body.visible = true; model.leftLeg.visible = true; model.rightLeg.visible = true; }
-                case FEET -> { model.leftLeg.visible = true; model.rightLeg.visible = true; }
-                default -> { }
-            }
-            return HumanoidMeshConverter.convertAttached(model, bodyModel);
+            // Change only the seven HumanoidModel roots, matching HumanoidArmorLayer's slot mask.
+            // The visibility state of custom children below those roots must remain untouched.
+            setSlotVisibility(model, slot);
+            MeshData data = HumanoidMeshConverter.convertAttached(model, bodyModel);
+            RecruitsPerformance.LOGGER.debug(
+                    "Captured armor mesh item={} slot={} model={} vertices={} triangles={}",
+                    itemId, slot.getName(), model.getClass().getName(), data.vertexCount(),
+                    data.indices().length / 3);
+            return data;
         } finally {
             restoreVisibility(model, visible);
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void copyProperties(HumanoidModel<?> source, HumanoidModel<?> target) {
+        ((HumanoidModel) source).copyPropertiesTo((HumanoidModel) target);
+    }
+
+    private static void setSlotVisibility(HumanoidModel<?> model, EquipmentSlot slot) {
+        model.head.visible = false;
+        model.hat.visible = false;
+        model.body.visible = false;
+        model.rightArm.visible = false;
+        model.leftArm.visible = false;
+        model.rightLeg.visible = false;
+        model.leftLeg.visible = false;
+        switch (slot) {
+            case HEAD -> { model.head.visible = true; model.hat.visible = true; }
+            case CHEST -> { model.body.visible = true; model.leftArm.visible = true; model.rightArm.visible = true; }
+            case LEGS -> { model.body.visible = true; model.leftLeg.visible = true; model.rightLeg.visible = true; }
+            case FEET -> { model.leftLeg.visible = true; model.rightLeg.visible = true; }
+            default -> { }
         }
     }
 
