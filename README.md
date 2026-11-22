@@ -16,7 +16,7 @@ Each recruit's native model and Mob Player Animator stack is sampled at stable t
 - Villager Recruits 1.15.2 or newer compatible 1.20.1 build
 - OpenGL 3.3 or newer; OpenGL 4.6 hardware is recommended
 
-The compatibility baseline is Recruits 1.15.2, Recruits Serious Animations 0.13.3, Mob Player Animator 1.3.3, Serious Player Animations 1.1.1, Better Mob Combat Recruits Fix 1.3.1, Better Combat 1.8.6, Icy's Better Horses 2.1.6, Oculus 1.8.0, Last Pagans Assorted Fixes 1.2.3, Recruits RTS Camera 0.24.5-server.1, and the supplied Epic Knights Addon 2.6, Dark Ages 1.1, Slavic Armory 2.1 and Antique Legacy 1.13 builds. Integrations remain reflection-only so those client visual mods are not hard server dependencies.
+The compatibility baseline is Recruits 1.15.2, Recruits Serious Animations 0.13.3, Mob Player Animator 1.3.3, Serious Player Animations 1.1.1, Better Mob Combat Recruits Fix 1.3.1, Better Combat 1.8.6, Icy's Better Horses 2.1.6, Oculus 1.8.0, Last Pagans Assorted Fixes 1.2.3, Recruits RTS Camera 0.24.5-server.1, the supplied Epic Knights Addon 2.6, Dark Ages 1.1, Slavic Armory 2.1 and Antique Legacy 1.13 builds, plus 7 Years War Uniforms 1.4.2, Victorian Uniforms 1.0.0 and SYW USA 1.0.0. Integrations remain reflection-only so those client visual mods are not hard server dependencies.
 
 ## Build
 
@@ -24,7 +24,7 @@ The compatibility baseline is Recruits 1.15.2, Recruits Serious Animations 0.13.
 ./gradlew clean build
 ```
 
-The distributable JAR is written to `build/libs/recruits-performance-1.20.1-1.0.0-alpha.12.jar`. The checked-in wrapper verifies Gradle 8.5 with its official SHA-256 checksum.
+The distributable JAR is written to `build/libs/recruits-performance-1.20.1-1.0.0-alpha.13.jar`. The checked-in wrapper verifies Gradle 8.5 with its official SHA-256 checksum.
 
 ## Install
 
@@ -43,8 +43,9 @@ Client settings are generated at `config/recruits-performance-client.toml`. The 
 - Body, helmet, chest, leg, boot, main-hand and off-hand geometry are cached separately, so mixed loadouts retain component batching.
 - Captured source-model bone rotations, Mob Player Animator whole-body motion, moving pivots and item channels are shared by body, armor and both held-item components through one pose index per entity.
 - Armor uses the inner/outer models installed on the live Recruits renderer. Epic Knights `ArmorDecoration` geometry, dye overlays and surcoat heraldry are obtained from its live registered layer and attached in the recruit model's bind pose, including models registered by installed addons.
+- Generated Forge armor hooks that return a newly baked model on every query are cached by their item, slot, entity, parent-model and stack variant. This preserves the custom uniforms from 7 Years War, Victorian Uniforms and SYW USA without turning their transient Java object identities into unbounded GPU meshes.
 - Mounted Icy's Better Horses 2.1.6 entities retain all 16 native horse-part transforms plus reusable body/tack meshes when carrying a recruit. Riders consume Icy's published saddle translation, pitch and roll instead of a hand-authored mount animation. Stabilizers, banners and optional horn layers retain the source renderer.
-- Cruor-bloodied weapons retain a shared base mesh plus a correctly textured dynamic stain pass. Cruor state is snapshotted once per tick and unique stain detail is omitted beyond its configured distance.
+- Cruor-bloodied weapons retain a shared base mesh plus a correctly textured dynamic stain pass. Wounded living recruits keep their instanced body and equipment while Cruor's registered wound layer performs its own hit placement, stacked-UV remapping, drying and texture upload after the crowd draw. Recruits cloth/biome material textures are registered with Cruor before wound settlement, and unique Cruor detail is omitted beyond its configured distance.
 - Only Villager Recruits units under the crosshair use the instanced nameplate queue; mounts and unrelated entities never enter it.
 - Resource reload destroys all GPU objects and lazily rebuilds them from the newly baked models.
 - Shader initialization writes the exact minimal and crowd GLSL sources to `logs/recruits-performance-shaders`, records their types, byte lengths and SHA-256 digests, and uses guarded NUL-terminated native buffers for AMD driver safety.

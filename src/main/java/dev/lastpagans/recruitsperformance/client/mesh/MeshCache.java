@@ -43,6 +43,7 @@ public final class MeshCache implements AutoCloseable {
 
     private final LinkedHashMap<String, GpuMesh> meshes = new LinkedHashMap<>(64, 0.75F, true);
     private final Set<String> equipmentMeshes = new java.util.HashSet<>();
+    private final Map<String, String> armorGeometries = new java.util.HashMap<>();
 
     public MeshHandle body(HumanoidModel<?> model, ResourceLocation texture, boolean fullDetail) {
         String geometry = model.getClass().getName() + (fullDetail ? ":full" : ":lod");
@@ -118,6 +119,7 @@ public final class MeshCache implements AutoCloseable {
         meshes.values().forEach(GpuMesh::close);
         meshes.clear();
         equipmentMeshes.clear();
+        armorGeometries.clear();
     }
 
     private void armor(LivingEntity entity, LivingEntityRenderer<?, ?> renderer,
@@ -127,40 +129,59 @@ public final class MeshCache implements AutoCloseable {
         if (!(stack.getItem() instanceof ArmorItem armor)) return;
         if (stack.hasFoil()) throw new IllegalStateException("Foil armor requires the vanilla glint pass");
         ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(stack.getItem());
-        HumanoidModel<?> fallback = HumanoidArmorCompat.model(renderer, slot);
-        Model resolved;
-        try {
-            // Forge's generic hook expects its original model to be fully configured and copies
-            // those properties into an item replacement such as Epic Knights' persistent model.
-            ForgeHooksClient.copyModelProperties(bodyModel, fallback);
-            setSlotVisibility(fallback, slot);
-            resolved = ForgeHooksClient.getArmorModel(entity, stack, slot, fallback);
-        } catch (Throwable failure) {
-            throw new IllegalStateException("Armor model adapter failed for " + itemId, failure);
+        int visualTag = stack.hasTag() ? stack.getTag().hashCode() : 0;
+        String armorVariant = itemId + ":" + slot.getName() + ":entity:"
+                + entity.getType() + ":parent:" + bodyModel.getClass().getName() + ":tag:" + visualTag;
+        String geometry = armorGeometries.get(armorVariant);
+        if (geometry != null && !meshes.containsKey(geometry)) {
+            // The LRU budget may evict an inactive mesh while its semantic lookup remains.
+            armorGeometries.remove(armorVariant);
+            geometry = null;
         }
-        if (!(resolved instanceof HumanoidModel<?> model)) {
-            throw new IllegalStateException("Armor model is not reusable humanoid geometry: "
-                    + itemId + " (" + (resolved == null ? "null" : resolved.getClass().getName()) + ")");
+        HumanoidModel<?> model = null;
+        if (geometry == null) {
+            HumanoidModel<?> fallback = HumanoidArmorCompat.model(renderer, slot);
+            Model resolved;
+            try {
+                // Forge's generic hook expects its original model to be fully configured and copies
+                // those properties into an item replacement such as Epic Knights' persistent model.
+                ForgeHooksClient.copyModelProperties(bodyModel, fallback);
+                setSlotVisibility(fallback, slot);
+                resolved = ForgeHooksClient.getArmorModel(entity, stack, slot, fallback);
+            } catch (Throwable failure) {
+                throw new IllegalStateException("Armor model adapter failed for " + itemId, failure);
+            }
+            if (!(resolved instanceof HumanoidModel<?> humanoid)) {
+                throw new IllegalStateException("Armor model is not reusable humanoid geometry: "
+                        + itemId + " (" + (resolved == null ? "null" : resolved.getClass().getName()) + ")");
+            }
+            model = humanoid;
+            // Reapply this explicitly as well: generic hooks copy it for standard replacements, while
+            // custom generic-model hooks are responsible for their own transfer and may omit it.
+            ForgeHooksClient.copyModelProperties(bodyModel, model);
+            setSlotVisibility(model, slot);
+            // Several MCreator armor packs (including 7 Years War, Victorian Uniforms and SYW USA)
+            // allocate a new HumanoidModel and freshly baked ModelParts every time this hook is
+            // queried. Cache the resolved semantic geometry, not the transient object identity.
+            geometry = armorVariant + ":model:" + model.getClass().getName();
         }
-        // Reapply this explicitly as well: generic hooks copy it for standard replacements, while
-        // custom generic-model hooks are responsible for their own transfer and may omit it.
-        ForgeHooksClient.copyModelProperties(bodyModel, model);
-        setSlotVisibility(model, slot);
         String baseTexture = armorTexture(armor, slot, null);
         String resolvedTexture = ForgeHooksClient.getArmorTexture(entity, stack, baseTexture, slot, null);
         ResourceLocation texture = new ResourceLocation(resolvedTexture);
-        String geometry = itemId + ":" + slot.getName() + ":" + model.getClass().getName() + ":"
-                + Integer.toHexString(System.identityHashCode(model)) + ":parent:"
-                + bodyModel.getClass().getName() + ":"
-                + Integer.toHexString(System.identityHashCode(bodyModel));
         MeshKey key = new MeshKey(geometry,
                 texture, -1, MeshKey.Kind.ARMOR);
         int tint = stack.getItem() instanceof DyeableLeatherItem dyeable
                 ? 0xFF000000 | dyeable.getColor(stack) : 0xFFFFFFFF;
         HumanoidModel<?> captured = model;
         MeshHandle handle = handle(key, key.geometry(), texture, tint, true,
-                () -> captureArmor(captured, bodyModel, slot, itemId));
+                () -> {
+                    if (captured == null) {
+                        throw new IllegalStateException("Missing cached armor geometry: " + itemId);
+                    }
+                    return captureArmor(captured, bodyModel, slot, itemId);
+                });
         if (handle == null) throw new IllegalStateException("Armor model produced no geometry: " + itemId);
+        armorGeometries.putIfAbsent(armorVariant, geometry);
         result.add(handle);
         if (stack.getItem() instanceof DyeableLeatherItem) {
             // HumanoidArmorLayer constructs the suffixed default path before invoking Forge's

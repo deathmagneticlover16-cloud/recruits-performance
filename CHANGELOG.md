@@ -1,3 +1,14 @@
+# 1.0.0 Alpha 13
+
+- Restored Cruor wounds on living recruits without restoring the full vanilla entity renderer: supported bodies and equipment remain GPU-instanced while only Cruor's wound overlay is replayed after the crowd draw.
+- Kept Cruor's own `WoundLayer`, wound painter, shared-UV remapper, drying state and dynamic textures authoritative through an optional reflection bridge; no Cruor or Assorted Fixes implementation was copied into Recruits Performance.
+- Registered Recruits team, biome and companion material textures with Cruor before it settles pending wounds so its skin mask includes the material layers actually visible on the recruit.
+- Reconstructed the crowd instance's camera, body-yaw, rider anchor and model-scale transforms for Cruor's overlay, and retained normal depth testing so armor occludes body wounds.
+- Limited the per-entity wound overlay to the existing configurable Cruor detail distance and kept failures isolated to the wound pass instead of disabling GPU instancing.
+- Restored the saved world projection while replaying Cruor wounds after Oculus' final composite, then restored the GUI projection before returning to Forge, so dynamic wound RenderTypes do not inherit GUI matrices.
+- Added semantic armor-geometry caching for 7 Years War Uniforms 1.4.2, Victorian Uniforms 1.0.0 and SYW USA 1.0.0. Their generated Forge hooks rebuild multiple model trees per query; identical uniforms now resolve and upload once per entity/model/stack variant instead of once per recruit per frame.
+- Bumped the mod to `1.0.0-alpha.13`.
+
 # 1.0.0 Alpha 12
 
 - Fixed dyeable armor overlays by constructing Minecraft's `_overlay` texture path before calling Forge's replacement hook, restoring Epic Knights straps, buckles, plates and other non-dyeable material details on recruits.

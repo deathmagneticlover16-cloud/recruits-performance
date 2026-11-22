@@ -29,7 +29,7 @@ public final class CrowdRendererConfig {
                 .defineInRange("renderDistance", 384.0, 32.0, 2048.0);
         geometryLodDistance = builder.comment("Distance where secondary body and equipment geometry is omitted while armor and the core silhouette remain.")
                 .defineInRange("geometryLodDistance", 160.0, 32.0, 1024.0);
-        cruorStainDistance = builder.comment("Maximum distance for unique Cruor weapon-stain material passes; farther weapons retain their shared base material.")
+        cruorStainDistance = builder.comment("Maximum distance for unique Cruor weapon stains and living body-wound overlays; farther recruits retain shared base materials.")
                 .defineInRange("cruorStainDistance", 16.0, 4.0, 64.0);
         meshCacheMegabytes = builder.comment("Approximate GPU mesh-cache budget.")
                 .defineInRange("meshCacheMegabytes", 384, 64, 2048);

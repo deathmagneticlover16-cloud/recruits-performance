@@ -2,8 +2,11 @@ package dev.lastpagans.recruitsperformance.client.render;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexSorting;
+import com.mojang.math.Axis;
 import dev.lastpagans.recruitsperformance.RecruitsPerformance;
 import dev.lastpagans.recruitsperformance.client.compat.BetterCombatCompat;
+import dev.lastpagans.recruitsperformance.client.compat.CruorBodyCompat;
 import dev.lastpagans.recruitsperformance.client.compat.IcysHorsesCompat;
 import dev.lastpagans.recruitsperformance.client.compat.ShaderPackCompat;
 import dev.lastpagans.recruitsperformance.client.diagnostics.CrowdDiagnostics;
@@ -58,6 +61,7 @@ public final class CrowdRenderer {
     private final List<PoseData> poses = new ArrayList<>();
     private final Map<LivingEntity, CachedPose> poseCache = new WeakHashMap<>();
     private final List<Nameplate> nameplates = new ArrayList<>();
+    private final List<CruorWound> cruorWounds = new ArrayList<>();
     private MeshCache cache;
     private CrowdShader shader;
     private CrowdPoseBuffer poseBuffer;
@@ -106,7 +110,8 @@ public final class CrowdRenderer {
                     ? poseIndex((HumanoidModel<LivingEntity>) model, entity, partialTick) : -1;
             InstanceData instance = InstanceData.from(entity, partialTick, packedLight, poseIndex, modelScale);
             add(body, instance.tinted(body.tint()));
-            for (RecruitVisualLayers.VisualLayer visualLayer : RecruitVisualLayers.layers(entity, texture)) {
+            List<RecruitVisualLayers.VisualLayer> visualLayers = RecruitVisualLayers.layers(entity, texture);
+            for (RecruitVisualLayers.VisualLayer visualLayer : visualLayers) {
                 MeshHandle layer = cache.bodyLayer(model, visualLayer.texture(), visualLayer.kind(), fullDetail);
                 if (layer == null) throw new IllegalStateException("Recruits visual layer produced no geometry: "
                         + visualLayer.texture());
@@ -114,6 +119,14 @@ public final class CrowdRenderer {
             }
             for (MeshHandle equipment : cache.equipment(entity, renderer, model, fullDetail, cruorDetail)) {
                 add(equipment, instance.tinted(equipment.tint()));
+            }
+            if (cruorDetail) {
+                Object woundLayer = CruorBodyCompat.woundLayer(renderer, entity);
+                if (woundLayer != null) {
+                    cruorWounds.add(new CruorWound(entity, (HumanoidModel<LivingEntity>) model,
+                            woundLayer, partialTick, packedLight, instance,
+                            visualLayers.stream().map(RecruitVisualLayers.VisualLayer::texture).toList()));
+                }
             }
             queueNameplate(entity, partialTick, packedLight, distanceSquared);
             submittedEntities.add(entity.getId());
@@ -235,7 +248,7 @@ public final class CrowdRenderer {
             }
             cache.trim(batches.keySet());
             resetGpuState();
-            renderNameplates(frame);
+            renderCompatibilityLayers(frame, bindMainTarget);
         } catch (Throwable renderFailure) {
             failed = true;
             RecruitsPerformance.LOGGER.error("Disabling Recruits crowd renderer after GPU failure", renderFailure);
@@ -256,6 +269,7 @@ public final class CrowdRenderer {
             fallbackEntities.clear();
             poses.clear();
             nameplates.clear();
+            cruorWounds.clear();
             deferredShaderFrame = null;
             fallbacks = 0;
         }
@@ -269,6 +283,8 @@ public final class CrowdRenderer {
             poses.clear();
             poseCache.clear();
             nameplates.clear();
+            cruorWounds.clear();
+            CruorBodyCompat.clear();
             deferredShaderFrame = null;
             if (cache != null) cache.close();
             if (shader != null) shader.close();
@@ -320,6 +336,7 @@ public final class CrowdRenderer {
 
     private void removeEntity(int entityId) {
         batches.values().forEach(batch -> batch.instances.removeIf(instance -> instance.entityId() == entityId));
+        cruorWounds.removeIf(wound -> wound.entity().getId() == entityId);
         submittedEntities.remove(entityId);
     }
 
@@ -361,6 +378,79 @@ public final class CrowdRenderer {
         buffers.endBatch();
     }
 
+    private void renderCruorWounds(FrameContext frame) {
+        if (cruorWounds.isEmpty()) return;
+        Minecraft minecraft = Minecraft.getInstance();
+        MultiBufferSource.BufferSource buffers = minecraft.renderBuffers().bufferSource();
+        Vec3 camera = frame.camera();
+        RenderSystem.enableDepthTest();
+        RenderSystem.depthFunc(GL_LEQUAL);
+        for (CruorWound wound : cruorWounds) {
+            try {
+                // Recreate the same native humanoid pose used by this recruit's GPU matrices.
+                // Cruor then owns wound placement, stacked-UV remapping, drying and texture upload.
+                HumanoidPoseEvaluator.evaluate(wound.model(), wound.entity(), wound.partialTick());
+                InstanceData instance = wound.instance();
+                PoseStack pose = new PoseStack();
+                pose.mulPoseMatrix(new Matrix4f(frame.view()));
+                pose.translate(instance.x() - camera.x, instance.y() - camera.y,
+                        instance.z() - camera.z);
+                pose.mulPose(Axis.YP.rotation(instance.mountYaw()));
+                pose.mulPose(Axis.XP.rotation(-instance.mountPitch()));
+                pose.mulPose(Axis.ZP.rotation(instance.mountRoll()));
+                pose.mulPose(Axis.YP.rotation(-instance.mountYaw()));
+                pose.translate(0.0F, instance.mountAnchor(), 0.0F);
+                pose.mulPose(Axis.YP.rotation(instance.yawRadians()));
+                pose.scale(-instance.scale(), -instance.scale(), instance.scale());
+                pose.translate(0.0F, -1.5F, 0.0F);
+                for (ResourceLocation layerTexture : wound.materialLayers()) {
+                    CruorBodyCompat.registerLayer(wound.model(), layerTexture, pose, buffers,
+                            wound.entity(), wound.packedLight());
+                }
+                CruorBodyCompat.render(wound.layer(), pose, buffers, wound.packedLight(),
+                        wound.entity(), wound.partialTick());
+            } catch (Throwable failure) {
+                String key = "cruor-body:" + wound.entity().getType();
+                if (warnedConversions.add(key)) {
+                    RecruitsPerformance.LOGGER.warn(
+                            "Cruor body-wound overlay failed for {}; keeping the instanced recruit",
+                            wound.entity().getType(), failure);
+                }
+            }
+        }
+        buffers.endBatch();
+        resetGpuState();
+    }
+
+    private void renderCompatibilityLayers(FrameContext frame, boolean deferredShaderPass) {
+        if (!deferredShaderPass) {
+            renderCruorWounds(frame);
+            renderNameplates(frame);
+            return;
+        }
+
+        // The Oculus crowd pass is intentionally deferred until RenderGuiEvent.Pre, after its
+        // final composite. At that point Minecraft has already installed the GUI projection and
+        // model-view matrices. Our instancing shader receives the saved world matrices directly,
+        // but Cruor and font RenderTypes use RenderSystem's globals. Temporarily restore the saved
+        // world projection and an identity model-view (the submitted vertices already contain
+        // frame.view), then put the GUI state back before returning to Forge's GUI pipeline.
+        Matrix4f previousProjection = new Matrix4f(RenderSystem.getProjectionMatrix());
+        VertexSorting previousSorting = RenderSystem.getVertexSorting();
+        RenderSystem.getModelViewStack().pushPose();
+        try {
+            RenderSystem.getModelViewStack().last().pose().identity();
+            RenderSystem.applyModelViewMatrix();
+            RenderSystem.setProjectionMatrix(frame.projection(), VertexSorting.DISTANCE_TO_ORIGIN);
+            renderCruorWounds(frame);
+            renderNameplates(frame);
+        } finally {
+            RenderSystem.getModelViewStack().popPose();
+            RenderSystem.applyModelViewMatrix();
+            RenderSystem.setProjectionMatrix(previousProjection, previousSorting);
+        }
+    }
+
     private static void resetGpuState() {
         glActiveTexture(GL_TEXTURE0);
         glBindVertexArray(0);
@@ -376,6 +466,10 @@ public final class CrowdRenderer {
 
     private record Nameplate(Component text, double x, double y, double z,
                              boolean discrete, int packedLight) {}
+
+    private record CruorWound(LivingEntity entity, HumanoidModel<LivingEntity> model, Object layer,
+                              float partialTick, int packedLight, InstanceData instance,
+                              List<ResourceLocation> materialLayers) {}
 
     private record FrameContext(Matrix4f projection, Matrix4f view, Vec3 camera) {
         private static FrameContext capture(RenderLevelStageEvent event) {
