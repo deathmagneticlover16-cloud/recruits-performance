@@ -1,3 +1,12 @@
+# 1.0.0 Alpha 11
+
+- Deferred the Oculus crowd draw until after the shader pipeline's final composite and explicitly rebound Minecraft's main framebuffer, preventing the final shader pass from overwriting every instanced recruit.
+- Added a render-tick fallback for hidden-HUD play so the post-composite crowd submission is not dependent on a GUI event.
+- Corrected Better Combat held-item matrix order to match Player Animation Library's injection point after Minecraft's fixed hand transform, keeping idle and swing weapons attached to the hand.
+- Captured body and armor meshes at unit root scale and moved live `ModelPart` scaling into each GPU pose, preventing the first animated recruit from baking collapsed or distorted skin and armor pieces into the shared mesh cache.
+- Configured both the Forge fallback and the resolved Epic Knights replacement with the active recruit model and equipment-slot visibility, including generic armor hooks that do not copy their own model properties.
+- Bumped the mod to `1.0.0-alpha.11`.
+
 # 1.0.0 Alpha 10
 
 - Replaced the direct `IClientItemExtensions#getHumanoidArmorModel` shortcut with Forge's complete `ForgeHooksClient#getArmorModel` pipeline, including the generic replacement-model property transfer used by Epic Knights and its addons.

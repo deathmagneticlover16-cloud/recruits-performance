@@ -29,8 +29,8 @@ public record PoseData(float[] values) {
         put(values, 3, model.leftArm);
         put(values, 4, model.rightLeg);
         put(values, 5, model.leftLeg);
-        putItem(values, 6, model.rightArm, rightItem);
-        putItem(values, 7, model.leftArm, leftItem);
+        putItem(values, 6, model.rightArm, rightItem, false);
+        putItem(values, 7, model.leftArm, leftItem, true);
         putMatrix(values, 16, bodyTransform);
         return new PoseData(values);
     }
@@ -52,10 +52,22 @@ public record PoseData(float[] values) {
         putMatrix(values, bone, skin(part, new Matrix4f(), new Matrix4f()));
     }
 
-    private static void putItem(float[] values, int bone, ModelPart arm, Matrix4f itemTransform) {
+    private static void putItem(float[] values, int bone, ModelPart arm, Matrix4f itemTransform,
+                                boolean leftHand) {
         Matrix4f bind = local(arm.getInitialPose());
         Matrix4f current = local(arm);
-        putMatrix(values, bone, current.mul(itemTransform).mul(bind.invert()));
+        Matrix4f hand = handTransform(leftHand);
+        // ItemInHandLayer applies the fixed hand transform before Player Animation Library
+        // injects Better Combat's item channel. The captured mesh already contains that fixed
+        // transform, so conjugate the animation into the captured coordinate space. The old
+        // A*I*H order was A*H*I in vanilla and made idle/swing weapons float away from the hand.
+        putMatrix(values, bone, current.mul(hand).mul(itemTransform)
+                .mul(new Matrix4f(hand).invert()).mul(bind.invert()));
+    }
+
+    private static Matrix4f handTransform(boolean leftHand) {
+        return new Matrix4f().rotateX((float) (-Math.PI / 2.0D)).rotateY((float) Math.PI)
+                .translate((leftHand ? -1.0F : 1.0F) / 16.0F, 0.125F, -0.625F);
     }
 
     public static void putMatrix(float[] values, int bone, Matrix4f matrix) {
@@ -71,7 +83,8 @@ public record PoseData(float[] values) {
     }
 
     public static Matrix4f local(ModelPart part) {
-        return local(part.x, part.y, part.z, part.xRot, part.yRot, part.zRot);
+        return local(part.x, part.y, part.z, part.xRot, part.yRot, part.zRot)
+                .scale(part.xScale, part.yScale, part.zScale);
     }
 
     private static Matrix4f local(float x, float y, float z, float xRot, float yRot, float zRot) {

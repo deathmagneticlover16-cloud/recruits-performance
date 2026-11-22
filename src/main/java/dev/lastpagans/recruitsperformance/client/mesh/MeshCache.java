@@ -130,11 +130,9 @@ public final class MeshCache implements AutoCloseable {
         HumanoidModel<?> fallback = HumanoidArmorCompat.model(renderer, slot);
         Model resolved;
         try {
-            // Mirror HumanoidArmorLayer exactly: copy the parent pose into the renderer's real
-            // inner/outer model, select the equipped slot, then invoke Forge's generic model hook.
-            // Calling getHumanoidArmorModel directly skips getGenericArmorModel, including the
-            // property transfer used by Epic Knights and other replacement armor models.
-            copyProperties(bodyModel, fallback);
+            // Forge's generic hook expects its original model to be fully configured and copies
+            // those properties into an item replacement such as Epic Knights' persistent model.
+            ForgeHooksClient.copyModelProperties(bodyModel, fallback);
             setSlotVisibility(fallback, slot);
             resolved = ForgeHooksClient.getArmorModel(entity, stack, slot, fallback);
         } catch (Throwable failure) {
@@ -144,6 +142,10 @@ public final class MeshCache implements AutoCloseable {
             throw new IllegalStateException("Armor model is not reusable humanoid geometry: "
                     + itemId + " (" + (resolved == null ? "null" : resolved.getClass().getName()) + ")");
         }
+        // Reapply this explicitly as well: generic hooks copy it for standard replacements, while
+        // custom generic-model hooks are responsible for their own transfer and may omit it.
+        ForgeHooksClient.copyModelProperties(bodyModel, model);
+        setSlotVisibility(model, slot);
         String baseTexture = armorTexture(armor, slot);
         String resolvedTexture = ForgeHooksClient.getArmorTexture(entity, stack, baseTexture, slot, null);
         ResourceLocation texture = new ResourceLocation(resolvedTexture);
@@ -331,11 +333,6 @@ public final class MeshCache implements AutoCloseable {
         } finally {
             restoreVisibility(model, visible);
         }
-    }
-
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    private static void copyProperties(HumanoidModel<?> source, HumanoidModel<?> target) {
-        ((HumanoidModel) source).copyPropertiesTo((HumanoidModel) target);
     }
 
     private static void setSlotVisibility(HumanoidModel<?> model, EquipmentSlot slot) {

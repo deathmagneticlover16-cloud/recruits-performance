@@ -15,6 +15,7 @@ import net.minecraftforge.client.event.RegisterClientReloadListenersEvent;
 import net.minecraftforge.client.event.RenderGuiEvent;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraftforge.client.event.RenderLivingEvent;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -42,6 +43,18 @@ public final class CrowdRenderEvents {
         @SubscribeEvent(priority = EventPriority.LOWEST)
         public static void renderCrowd(RenderLevelStageEvent event) {
             CrowdRenderer.get().render(event);
+        }
+
+        @SubscribeEvent(priority = EventPriority.LOWEST)
+        public static void renderShaderCrowdBeforeGui(RenderGuiEvent.Pre event) {
+            CrowdRenderer.get().renderDeferredShaderCrowd();
+        }
+
+        @SubscribeEvent(priority = EventPriority.LOWEST)
+        public static void finishShaderCrowdWithoutGui(TickEvent.RenderTickEvent event) {
+            // RenderGuiEvent is not fired while the HUD is hidden. RenderTick END is only a
+            // fallback; the GUI path consumes the deferred frame first during normal play.
+            if (event.phase == TickEvent.Phase.END) CrowdRenderer.get().renderDeferredShaderCrowd();
         }
 
         @SubscribeEvent

@@ -28,6 +28,7 @@ import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
 import org.joml.Matrix4f;
 
@@ -63,6 +64,7 @@ public final class CrowdRenderer {
     private GpuFrameTimer gpuTimer;
     private boolean failed;
     private int fallbacks;
+    private FrameContext deferredShaderFrame;
 
     public static CrowdRenderer get() { return INSTANCE; }
 
@@ -168,16 +170,37 @@ public final class CrowdRenderer {
         RenderLevelStageEvent.Stage stage = event.getStage();
         if (stage != RenderLevelStageEvent.Stage.AFTER_ENTITIES
                 && stage != RenderLevelStageEvent.Stage.AFTER_LEVEL) return;
-        RenderLevelStageEvent.Stage target = ShaderPackCompat.isShaderPackActive()
-                ? RenderLevelStageEvent.Stage.AFTER_LEVEL : RenderLevelStageEvent.Stage.AFTER_ENTITIES;
-        if (stage != target || batches.isEmpty() || failed) return;
+        boolean shaderPack = ShaderPackCompat.isShaderPackActive();
+        if (shaderPack) {
+            if (stage == RenderLevelStageEvent.Stage.AFTER_LEVEL && !batches.isEmpty() && !failed) {
+                // Oculus runs its final composite after Forge's AFTER_LEVEL stage. Drawing here
+                // makes a valid instanced crowd briefly, then the composite overwrites it. Keep
+                // the world matrices and submit to the main target immediately before the GUI.
+                deferredShaderFrame = FrameContext.capture(event);
+            }
+            return;
+        }
+        if (stage != RenderLevelStageEvent.Stage.AFTER_ENTITIES || batches.isEmpty() || failed) return;
+        deferredShaderFrame = null;
+        renderFrame(FrameContext.capture(event), false);
+    }
+
+    public void renderDeferredShaderCrowd() {
+        FrameContext frame = deferredShaderFrame;
+        if (frame == null || batches.isEmpty() || failed) return;
+        deferredShaderFrame = null;
+        renderFrame(frame, true);
+    }
+
+    private void renderFrame(FrameContext frame, boolean bindMainTarget) {
         long started = System.nanoTime();
         int drawCalls = 0;
         int instances = 0;
         try {
-            var camera = event.getCamera().getPosition();
-            Matrix4f projection = new Matrix4f(event.getProjectionMatrix());
-            Matrix4f view = new Matrix4f(event.getPoseStack().last().pose());
+            // Oculus' final pass leaves the completed scene in Minecraft's main target. Rebind it
+            // explicitly because a shader pack is free to leave another framebuffer active.
+            if (bindMainTarget) Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
+            Vec3 camera = frame.camera();
 
             glActiveTexture(GL_TEXTURE1);
             poseBuffer.upload(poses);
@@ -192,7 +215,7 @@ public final class CrowdRenderer {
             RenderSystem.enableCull();
             RenderSystem.enableBlend();
             RenderSystem.defaultBlendFunc();
-            shader.uniforms(projection, view, camera.x, camera.y, camera.z,
+            shader.uniforms(frame.projection(), frame.view(), camera.x, camera.y, camera.z,
                     CrowdRendererConfig.gpuAnimation.get(), poses.size());
 
             glActiveTexture(GL_TEXTURE0);
@@ -212,7 +235,7 @@ public final class CrowdRenderer {
             }
             cache.trim(batches.keySet());
             resetGpuState();
-            renderNameplates(event);
+            renderNameplates(frame);
         } catch (Throwable renderFailure) {
             failed = true;
             RecruitsPerformance.LOGGER.error("Disabling Recruits crowd renderer after GPU failure", renderFailure);
@@ -233,6 +256,7 @@ public final class CrowdRenderer {
             fallbackEntities.clear();
             poses.clear();
             nameplates.clear();
+            deferredShaderFrame = null;
             fallbacks = 0;
         }
     }
@@ -245,6 +269,7 @@ public final class CrowdRenderer {
             poses.clear();
             poseCache.clear();
             nameplates.clear();
+            deferredShaderFrame = null;
             if (cache != null) cache.close();
             if (shader != null) shader.close();
             if (poseBuffer != null) poseBuffer.close();
@@ -309,13 +334,14 @@ public final class CrowdRenderer {
                 entity.isDiscrete(), packedLight));
     }
 
-    private void renderNameplates(RenderLevelStageEvent event) {
+    private void renderNameplates(FrameContext frame) {
         if (nameplates.isEmpty()) return;
         Minecraft minecraft = Minecraft.getInstance();
         Font font = minecraft.font;
         MultiBufferSource.BufferSource buffers = minecraft.renderBuffers().bufferSource();
-        PoseStack pose = event.getPoseStack();
-        var camera = event.getCamera().getPosition();
+        PoseStack pose = new PoseStack();
+        pose.mulPoseMatrix(new Matrix4f(frame.view()));
+        Vec3 camera = frame.camera();
         for (Nameplate label : nameplates) {
             pose.pushPose();
             pose.translate(label.x - camera.x, label.y - camera.y, label.z - camera.z);
@@ -350,6 +376,13 @@ public final class CrowdRenderer {
 
     private record Nameplate(Component text, double x, double y, double z,
                              boolean discrete, int packedLight) {}
+
+    private record FrameContext(Matrix4f projection, Matrix4f view, Vec3 camera) {
+        private static FrameContext capture(RenderLevelStageEvent event) {
+            return new FrameContext(new Matrix4f(event.getProjectionMatrix()),
+                    new Matrix4f(event.getPoseStack().last().pose()), event.getCamera().getPosition());
+        }
+    }
 
     private static final class CachedPose {
         private HumanoidModel<LivingEntity> model;

@@ -51,19 +51,29 @@ public final class HumanoidMeshConverter {
             capture(model.rightLeg, RIGHT_LEG, consumer);
             capture(model.leftLeg, LEFT_LEG, consumer);
         } finally {
-            poses.forEach(saved -> saved.part.loadPose(saved.pose));
+            poses.forEach(SavedPose::restore);
         }
         return builder.buildQuads();
     }
 
     private static void loadBindPose(HumanoidModel<?> model, HumanoidModel<?> bindModel) {
-        model.head.loadPose(bindModel.head.getInitialPose());
-        model.hat.loadPose(bindModel.hat.getInitialPose());
-        model.body.loadPose(bindModel.body.getInitialPose());
-        model.rightArm.loadPose(bindModel.rightArm.getInitialPose());
-        model.leftArm.loadPose(bindModel.leftArm.getInitialPose());
-        model.rightLeg.loadPose(bindModel.rightLeg.getInitialPose());
-        model.leftLeg.loadPose(bindModel.leftLeg.getInitialPose());
+        loadBindPart(model.head, bindModel.head);
+        loadBindPart(model.hat, bindModel.hat);
+        loadBindPart(model.body, bindModel.body);
+        loadBindPart(model.rightArm, bindModel.rightArm);
+        loadBindPart(model.leftArm, bindModel.leftArm);
+        loadBindPart(model.rightLeg, bindModel.rightLeg);
+        loadBindPart(model.leftLeg, bindModel.leftLeg);
+    }
+
+    private static void loadBindPart(ModelPart target, ModelPart source) {
+        target.loadPose(source.getInitialPose());
+        // ModelPart scale is mutable animation state but is not represented by PartPose. Baking
+        // the first entity's scale into a shared mesh makes later skin and armor pieces disappear
+        // or distort. Keep the cached geometry unscaled; PoseData supplies live root scale.
+        target.xScale = 1.0F;
+        target.yScale = 1.0F;
+        target.zScale = 1.0F;
     }
 
     private static void capture(ModelPart part, int bone, CaptureVertexConsumer consumer) {
@@ -75,15 +85,26 @@ public final class HumanoidMeshConverter {
 
     private static List<SavedPose> save(HumanoidModel<?> model) {
         List<SavedPose> poses = new ArrayList<>(7);
-        poses.add(new SavedPose(model.head, model.head.storePose()));
-        poses.add(new SavedPose(model.hat, model.hat.storePose()));
-        poses.add(new SavedPose(model.body, model.body.storePose()));
-        poses.add(new SavedPose(model.rightArm, model.rightArm.storePose()));
-        poses.add(new SavedPose(model.leftArm, model.leftArm.storePose()));
-        poses.add(new SavedPose(model.rightLeg, model.rightLeg.storePose()));
-        poses.add(new SavedPose(model.leftLeg, model.leftLeg.storePose()));
+        poses.add(SavedPose.capture(model.head));
+        poses.add(SavedPose.capture(model.hat));
+        poses.add(SavedPose.capture(model.body));
+        poses.add(SavedPose.capture(model.rightArm));
+        poses.add(SavedPose.capture(model.leftArm));
+        poses.add(SavedPose.capture(model.rightLeg));
+        poses.add(SavedPose.capture(model.leftLeg));
         return poses;
     }
 
-    private record SavedPose(ModelPart part, PartPose pose) {}
+    private record SavedPose(ModelPart part, PartPose pose, float xScale, float yScale, float zScale) {
+        private static SavedPose capture(ModelPart part) {
+            return new SavedPose(part, part.storePose(), part.xScale, part.yScale, part.zScale);
+        }
+
+        private void restore() {
+            part.loadPose(pose);
+            part.xScale = xScale;
+            part.yScale = yScale;
+            part.zScale = zScale;
+        }
+    }
 }

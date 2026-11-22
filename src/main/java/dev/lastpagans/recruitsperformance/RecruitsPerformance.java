@@ -17,7 +17,7 @@ public final class RecruitsPerformance {
         ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, PerformanceConfig.SPEC);
         ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, CrowdRendererConfig.SPEC,
                 "recruits-performance-client.toml");
-        LOGGER.info("Recruits Performance 1.0.0-alpha.10 loaded with GPU crowd rendering");
+        LOGGER.info("Recruits Performance 1.0.0-alpha.11 loaded with GPU crowd rendering");
     }
 }
 

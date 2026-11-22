@@ -24,7 +24,7 @@ The compatibility baseline is Recruits 1.15.2, Recruits Serious Animations 0.13.
 ./gradlew clean build
 ```
 
-The distributable JAR is written to `build/libs/recruits-performance-1.20.1-1.0.0-alpha.10.jar`. The checked-in wrapper verifies Gradle 8.5 with its official SHA-256 checksum.
+The distributable JAR is written to `build/libs/recruits-performance-1.20.1-1.0.0-alpha.11.jar`. The checked-in wrapper verifies Gradle 8.5 with its official SHA-256 checksum.
 
 ## Install
 
@@ -37,7 +37,7 @@ Client settings are generated at `config/recruits-performance-client.toml`. The 
 - Vanilla Recruits rendering is cancelled only after the complete body and equipped loadout has converted successfully.
 - Supported recruits stay instanced at every distance; there is no blanket near-field source-renderer zone.
 - Hurt flashes and Better Mob Combat attacks use GPU overlay and animation states without leaving the instanced path.
-- When Iris/Oculus reports an active shader pack, the instanced crowd pass moves to `AFTER_LEVEL`; repeated Oculus entity and shadow passes remain cancelled after the entity's single GPU submission.
+- When Iris/Oculus reports an active shader pack, the world matrices are captured at `AFTER_LEVEL` and the instanced crowd is submitted to Minecraft's main target after Oculus' final composite but before the HUD; repeated Oculus entity and shadow passes remain cancelled after the entity's single GPU submission.
 - If a foreign model cannot produce reusable geometry, that entity keeps its original renderer and the fallback is reported. Equipment is never silently omitted.
 - The supported Recruits humanoid material adapter preserves the source renderer's deterministic team, biome and companion layer order, no-cull state and `LEQUAL` coplanar depth contract; unknown Recruits body formats and custom-head items deliberately retain vanilla rendering.
 - Body, helmet, chest, leg, boot, main-hand and off-hand geometry are cached separately, so mixed loadouts retain component batching.
