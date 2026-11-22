@@ -146,7 +146,7 @@ public final class MeshCache implements AutoCloseable {
         // custom generic-model hooks are responsible for their own transfer and may omit it.
         ForgeHooksClient.copyModelProperties(bodyModel, model);
         setSlotVisibility(model, slot);
-        String baseTexture = armorTexture(armor, slot);
+        String baseTexture = armorTexture(armor, slot, null);
         String resolvedTexture = ForgeHooksClient.getArmorTexture(entity, stack, baseTexture, slot, null);
         ResourceLocation texture = new ResourceLocation(resolvedTexture);
         String geometry = itemId + ":" + slot.getName() + ":" + model.getClass().getName() + ":"
@@ -163,7 +163,13 @@ public final class MeshCache implements AutoCloseable {
         if (handle == null) throw new IllegalStateException("Armor model produced no geometry: " + itemId);
         result.add(handle);
         if (stack.getItem() instanceof DyeableLeatherItem) {
-            String overlayTexture = ForgeHooksClient.getArmorTexture(entity, stack, baseTexture, slot, "overlay");
+            // HumanoidArmorLayer constructs the suffixed default path before invoking Forge's
+            // item hook. ForgeHooksClient only lets an item replace the supplied path; it does
+            // not append "_overlay" itself. Passing baseTexture here bound the dyeable texture
+            // twice and discarded every non-dyeable strap, buckle and plate detail.
+            String overlayDefault = armorTexture(armor, slot, "overlay");
+            String overlayTexture = ForgeHooksClient.getArmorTexture(
+                    entity, stack, overlayDefault, slot, "overlay");
             ResourceLocation overlay = new ResourceLocation(overlayTexture);
             MeshKey overlayKey = new MeshKey(key.geometry(), overlay, -1, MeshKey.Kind.ARMOR_OVERLAY);
             MeshHandle overlayHandle = handle(overlayKey, key.geometry(), overlay, 0xFFFFFFFF, true,
@@ -363,7 +369,7 @@ public final class MeshCache implements AutoCloseable {
         model.rightLeg.visible = v[5]; model.leftLeg.visible = v[6];
     }
 
-    private static String armorTexture(ArmorItem item, EquipmentSlot slot) {
+    private static String armorTexture(ArmorItem item, EquipmentSlot slot, String layer) {
         String material = item.getMaterial().getName();
         String namespace = "minecraft";
         String path = material;
@@ -372,8 +378,9 @@ public final class MeshCache implements AutoCloseable {
             namespace = material.substring(0, separator);
             path = material.substring(separator + 1);
         }
+        String suffix = layer == null ? "" : "_" + layer;
         return namespace + ":textures/models/armor/" + path + "_layer_" +
-                (slot == EquipmentSlot.LEGS ? 2 : 1) + ".png";
+                (slot == EquipmentSlot.LEGS ? 2 : 1) + suffix + ".png";
     }
 
     @FunctionalInterface

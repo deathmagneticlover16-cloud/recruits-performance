@@ -1,3 +1,10 @@
+# 1.0.0 Alpha 12
+
+- Fixed dyeable armor overlays by constructing Minecraft's `_overlay` texture path before calling Forge's replacement hook, restoring Epic Knights straps, buckles, plates and other non-dyeable material details on recruits.
+- Verified the failure against `magistuarmory:gambeson_chestplate` on Recruits Performance `1.0.0-alpha.11`: the GPU pass was binding the dyeable base texture for both armor passes while player and armor-stand rendering used distinct base and overlay textures.
+- Applied the correction to every `DyeableLeatherItem` armor set rather than adding an Epic Knights item whitelist.
+- Bumped the mod to `1.0.0-alpha.12`.
+
 # 1.0.0 Alpha 11
 
 - Deferred the Oculus crowd draw until after the shader pipeline's final composite and explicitly rebound Minecraft's main framebuffer, preventing the final shader pass from overwriting every instanced recruit.
