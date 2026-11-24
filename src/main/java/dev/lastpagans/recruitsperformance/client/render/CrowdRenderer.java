@@ -47,6 +47,7 @@ import java.util.WeakHashMap;
 import static org.lwjgl.opengl.GL11C.*;
 import static org.lwjgl.opengl.GL13C.GL_TEXTURE0;
 import static org.lwjgl.opengl.GL13C.GL_TEXTURE1;
+import static org.lwjgl.opengl.GL13C.GL_TEXTURE2;
 import static org.lwjgl.opengl.GL13C.glActiveTexture;
 import static org.lwjgl.opengl.GL20C.glUseProgram;
 import static org.lwjgl.opengl.GL30C.glBindVertexArray;
@@ -209,6 +210,7 @@ public final class CrowdRenderer {
         long started = System.nanoTime();
         int drawCalls = 0;
         int instances = 0;
+        boolean lightLayerEnabled = false;
         try {
             // Oculus' final pass leaves the completed scene in Minecraft's main target. Rebind it
             // explicitly because a shader pack is free to leave another framebuffer active.
@@ -231,6 +233,14 @@ public final class CrowdRenderer {
             shader.uniforms(frame.projection(), frame.view(), camera.x, camera.y, camera.z,
                     CrowdRendererConfig.gpuAnimation.get(), poses.size());
 
+            // Packed sky light is deliberately still 15 outdoors at midnight. Minecraft applies
+            // day/night, weather, dimension ambient light and gamma through this live 16x16
+            // lightmap; reducing the packed values to max(block, sky) made crowds full-bright.
+            Minecraft minecraft = Minecraft.getInstance();
+            minecraft.gameRenderer.lightTexture().turnOnLightLayer();
+            lightLayerEnabled = true;
+            glActiveTexture(GL_TEXTURE2);
+            glBindTexture(GL_TEXTURE_2D, RenderSystem.getShaderTexture(2));
             glActiveTexture(GL_TEXTURE0);
             gpuTimer.begin();
             List<Batch> orderedBatches = new ArrayList<>(batches.values());
@@ -254,6 +264,11 @@ public final class CrowdRenderer {
             RecruitsPerformance.LOGGER.error("Disabling Recruits crowd renderer after GPU failure", renderFailure);
         } finally {
             if (gpuTimer != null) gpuTimer.end();
+            if (lightLayerEnabled) {
+                Minecraft.getInstance().gameRenderer.lightTexture().turnOffLightLayer();
+                glActiveTexture(GL_TEXTURE2);
+                glBindTexture(GL_TEXTURE_2D, 0);
+            }
             resetGpuState();
             RenderSystem.disableBlend();
             RenderSystem.depthFunc(GL_LEQUAL);

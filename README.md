@@ -24,7 +24,7 @@ The compatibility baseline is Recruits 1.15.2, Recruits Serious Animations 0.13.
 ./gradlew clean build
 ```
 
-The distributable JAR is written to `build/libs/recruits-performance-1.20.1-1.0.0-alpha.13.jar`. The checked-in wrapper verifies Gradle 8.5 with its official SHA-256 checksum.
+The distributable JAR is written to `build/libs/recruits-performance-1.20.1-1.0.0-alpha.14.jar`. The checked-in wrapper verifies Gradle 8.5 with its official SHA-256 checksum.
 
 ## Install
 
@@ -49,7 +49,7 @@ Client settings are generated at `config/recruits-performance-client.toml`. The 
 - Only Villager Recruits units under the crosshair use the instanced nameplate queue; mounts and unrelated entities never enter it.
 - Resource reload destroys all GPU objects and lazily rebuilds them from the newly baked models.
 - Shader initialization writes the exact minimal and crowd GLSL sources to `logs/recruits-performance-shaders`, records their types, byte lengths and SHA-256 digests, and uses guarded NUL-terminated native buffers for AMD driver safety.
-- Minecraft's depth buffer, camera matrices, fog, alpha cutout and sampled block/sky light remain active for the crowd pass.
+- Minecraft's depth buffer, camera matrices, fog, alpha cutout and live lightmap remain active for the crowd pass. The lightmap applies the same day/night, weather, dimension and gamma response used by ordinary entity rendering.
 - Recruits RTS movement hints and ordinary entity combat/use state select GPU animation states without changing server-authoritative gameplay.
 
 The observational AI scheduler, simulation tiers and deterministic formation API remain in the project. Their server commands continue under `/recruitsperf`.

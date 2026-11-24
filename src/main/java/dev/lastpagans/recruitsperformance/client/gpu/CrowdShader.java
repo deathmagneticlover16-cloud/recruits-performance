@@ -66,7 +66,7 @@ public final class CrowdShader implements AutoCloseable {
             out vec2 vUv;
             out vec3 vNormal;
             out vec4 vColor;
-            out float vLight;
+            out vec2 vLight;
             out float vFogDistance;
             out float vHurt;
 
@@ -119,7 +119,7 @@ public final class CrowdShader implements AutoCloseable {
                 vUv = aUv;
                 vNormal = normalize(rootNormal);
                 vColor = aColor * iColor;
-                vLight = clamp(max(iLight.x, iLight.y), 0.12, 1.0);
+                vLight = clamp(iLight, 0.0, 1.0);
                 vFogDistance = length(viewPosition.xyz);
                 vHurt = iAnimation == 7.0 ? 1.0 : 0.0;
             }
@@ -130,10 +130,11 @@ public final class CrowdShader implements AutoCloseable {
             in vec2 vUv;
             in vec3 vNormal;
             in vec4 vColor;
-            in float vLight;
+            in vec2 vLight;
             in float vFogDistance;
             in float vHurt;
             uniform sampler2D uTexture;
+            uniform sampler2D uLightmap;
             uniform vec3 uFogColor;
             uniform float uFogStart;
             uniform float uFogEnd;
@@ -142,7 +143,9 @@ public final class CrowdShader implements AutoCloseable {
                 vec4 texel = texture(uTexture, vUv) * vColor;
                 if (texel.a < 0.1) discard;
                 float diffuse = 0.68 + 0.32 * max(dot(normalize(vNormal), normalize(vec3(0.2, 1.0, -0.35))), 0.0);
-                vec3 lit = texel.rgb * vLight * diffuse;
+                ivec2 lightTexel = ivec2(clamp(floor(vLight * 15.0 + 0.5), vec2(0.0), vec2(15.0)));
+                vec3 light = texelFetch(uLightmap, lightTexel, 0).rgb;
+                vec3 lit = texel.rgb * light * diffuse;
                 lit = mix(lit, vec3(1.0, 0.08, 0.08), vHurt * 0.24);
                 float fog = clamp((uFogEnd - vFogDistance) / max(uFogEnd - uFogStart, 0.001), 0.0, 1.0);
                 fragColor = vec4(mix(uFogColor, lit, fog), texel.a);
@@ -183,6 +186,7 @@ public final class CrowdShader implements AutoCloseable {
             glUseProgram(created);
             glUniform1i(uniform(created, "uTexture"), 0);
             glUniform1i(uniform(created, "uPoseBuffer"), 1);
+            glUniform1i(uniform(created, "uLightmap"), 2);
             checkNoGlError("initializing crowd shader uniforms");
         } catch (RuntimeException | Error failure) {
             glDeleteProgram(created);

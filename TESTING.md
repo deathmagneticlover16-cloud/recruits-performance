@@ -20,7 +20,8 @@ Before visual testing on AMD, inspect `logs/recruits-performance-shaders`. Start
 12. Verify a nameplate appears only while the crosshair is over a Recruits unit; point at its horse and unrelated living entities and confirm no GPU nameplate is queued. Also verify ground shadows, enchanted glint fallback, glowing outlines and source death presentation.
 13. Order recruits across open ground and around obstacles. Confirm native pathfinding and native movement speed remain unchanged with Recruits Performance installed.
 14. Test with Oculus 1.8.0 both without and with the target shader pack, including daylight, fog, rain, shadowed scenes and the HUD hidden with F1. Confirm recruits remain visible after Oculus' final composite, diagnostics still report one submitted recruit per entity despite Oculus entity/shadow passes, no vanilla armor layer reappears, and instanced draw calls remain active in both modes; compare CPU/GPU frame time at equal recruit counts.
-15. Confirm the diagnostics GPU duration becomes non-zero after the first measured crowd frames and that it updates without visible stalls.
-16. Set `enabled=false`; restart and confirm the original Recruits renderer is restored for A/B comparison.
+15. Compare recruits with a vanilla living entity at noon, midnight, underground at block light 0, beside a torch, during rain and in the Nether. Confirm bodies, armor, held items and horses darken and tint with Minecraft's live lightmap instead of remaining full-bright; repeat with non-default gamma and Oculus enabled.
+16. Confirm the diagnostics GPU duration becomes non-zero after the first measured crowd frames and that it updates without visible stalls.
+17. Set `enabled=false`; restart and confirm the original Recruits renderer is restored for A/B comparison.
 
 Run the scenarios in [BENCHMARKING.md](BENCHMARKING.md) on the target RX 570. The cloud build environment can compile and validate CPU contracts but cannot verify real OpenGL driver behavior, visual equivalence, shader-pack interoperability or GPU frame time.

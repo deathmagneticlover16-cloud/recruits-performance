@@ -1,3 +1,10 @@
+# 1.0.0 Alpha 14
+
+- Replaced the crowd shader's `max(blockLight, skyLight)` approximation with Minecraft's live 16×16 lightmap texture, fixing recruits that remained full-bright outdoors at night.
+- Removed the hard-coded 12% light floor and retained separate packed block/sky coordinates through the instance stream so time of day, weather, dimension ambient light, gamma and nearby light sources use Minecraft's current lightmap.
+- Bound the lightmap explicitly on texture unit 2 for the custom instanced shader and restored Minecraft's light-layer state after every crowd pass, including the deferred Oculus path.
+- Bumped the mod to `1.0.0-alpha.14`.
+
 # 1.0.0 Alpha 13
 
 - Restored Cruor wounds on living recruits without restoring the full vanilla entity renderer: supported bodies and equipment remain GPU-instanced while only Cruor's wound overlay is replayed after the crowd draw.
