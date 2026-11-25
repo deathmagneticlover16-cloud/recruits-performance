@@ -9,10 +9,8 @@ import dev.lastpagans.recruitsperformance.client.compat.BetterCombatCompat;
 import dev.lastpagans.recruitsperformance.client.compat.CruorBodyCompat;
 import dev.lastpagans.recruitsperformance.client.compat.IcysHorsesCompat;
 import dev.lastpagans.recruitsperformance.client.compat.ShaderPackCompat;
-import dev.lastpagans.recruitsperformance.client.diagnostics.CrowdDiagnostics;
 import dev.lastpagans.recruitsperformance.client.gpu.CrowdShader;
 import dev.lastpagans.recruitsperformance.client.gpu.CrowdPoseBuffer;
-import dev.lastpagans.recruitsperformance.client.gpu.GpuFrameTimer;
 import dev.lastpagans.recruitsperformance.client.mesh.MeshCache;
 import dev.lastpagans.recruitsperformance.client.mesh.MeshHandle;
 import dev.lastpagans.recruitsperformance.client.mesh.HorseModelAdapter;
@@ -66,9 +64,7 @@ public final class CrowdRenderer {
     private MeshCache cache;
     private CrowdShader shader;
     private CrowdPoseBuffer poseBuffer;
-    private GpuFrameTimer gpuTimer;
     private boolean failed;
-    private int fallbacks;
     private FrameContext deferredShaderFrame;
 
     public static CrowdRenderer get() { return INSTANCE; }
@@ -93,7 +89,6 @@ public final class CrowdRenderer {
         }
         if (!(sourceModel instanceof HumanoidModel<?> model)) {
             fallbackEntities.add(entity.getId());
-            fallbacks++;
             return false;
         }
         if (!initialize()) return false;
@@ -140,7 +135,6 @@ public final class CrowdRenderer {
             }
             removeEntity(entity.getId());
             fallbackEntities.add(entity.getId());
-            fallbacks++;
             return false;
         }
     }
@@ -175,7 +169,6 @@ public final class CrowdRenderer {
             }
             removeEntity(horse.getId());
             fallbackEntities.add(horse.getId());
-            fallbacks++;
             return false;
         }
     }
@@ -207,9 +200,6 @@ public final class CrowdRenderer {
     }
 
     private void renderFrame(FrameContext frame, boolean bindMainTarget) {
-        long started = System.nanoTime();
-        int drawCalls = 0;
-        int instances = 0;
         boolean lightLayerEnabled = false;
         try {
             // Oculus' final pass leaves the completed scene in Minecraft's main target. Rebind it
@@ -242,7 +232,6 @@ public final class CrowdRenderer {
             glActiveTexture(GL_TEXTURE2);
             glBindTexture(GL_TEXTURE_2D, RenderSystem.getShaderTexture(2));
             glActiveTexture(GL_TEXTURE0);
-            gpuTimer.begin();
             List<Batch> orderedBatches = new ArrayList<>(batches.values());
             orderedBatches.sort(Comparator.comparingInt(
                     batch -> batch.handle.key().kind().renderOrder()));
@@ -253,8 +242,6 @@ public final class CrowdRenderer {
                 int texture = Minecraft.getInstance().getTextureManager().getTexture(batch.handle.texture()).getId();
                 glBindTexture(GL_TEXTURE_2D, texture);
                 batch.handle.mesh().draw(batch.instances.size());
-                drawCalls++;
-                instances += batch.instances.size();
             }
             cache.trim(batches.keySet());
             resetGpuState();
@@ -263,7 +250,6 @@ public final class CrowdRenderer {
             failed = true;
             RecruitsPerformance.LOGGER.error("Disabling Recruits crowd renderer after GPU failure", renderFailure);
         } finally {
-            if (gpuTimer != null) gpuTimer.end();
             if (lightLayerEnabled) {
                 Minecraft.getInstance().gameRenderer.lightTexture().turnOffLightLayer();
                 glActiveTexture(GL_TEXTURE2);
@@ -273,12 +259,6 @@ public final class CrowdRenderer {
             RenderSystem.disableBlend();
             RenderSystem.depthFunc(GL_LEQUAL);
             RenderSystem.enableCull();
-            long elapsed = System.nanoTime() - started;
-            CrowdDiagnostics.get().publish(submittedEntities.size(), submittedEntities.size(), batches.size(),
-                    instances, drawCalls, cache == null ? 0 : cache.size(),
-                    cache == null ? 0 : cache.equipmentVariants(), fallbacks,
-                    (cache == null ? 0 : cache.bytes()) + (poseBuffer == null ? 0 : poseBuffer.bytes()),
-                    elapsed, gpuTimer == null ? 0 : gpuTimer.lastNanos());
             batches.clear();
             submittedEntities.clear();
             fallbackEntities.clear();
@@ -286,7 +266,6 @@ public final class CrowdRenderer {
             nameplates.clear();
             cruorWounds.clear();
             deferredShaderFrame = null;
-            fallbacks = 0;
         }
     }
 
@@ -304,33 +283,28 @@ public final class CrowdRenderer {
             if (cache != null) cache.close();
             if (shader != null) shader.close();
             if (poseBuffer != null) poseBuffer.close();
-            if (gpuTimer != null) gpuTimer.close();
             cache = null;
             shader = null;
             poseBuffer = null;
-            gpuTimer = null;
             failed = false;
         };
         if (RenderSystem.isOnRenderThread()) close.run(); else RenderSystem.recordRenderCall(close::run);
     }
 
     private boolean initialize() {
-        if (shader != null && cache != null && poseBuffer != null && gpuTimer != null) return true;
+        if (shader != null && cache != null && poseBuffer != null) return true;
         try {
             shader = new CrowdShader();
             cache = new MeshCache();
             poseBuffer = new CrowdPoseBuffer();
-            gpuTimer = new GpuFrameTimer();
             return true;
         } catch (Throwable initializationFailure) {
             if (poseBuffer != null) poseBuffer.close();
             if (cache != null) cache.close();
             if (shader != null) shader.close();
-            if (gpuTimer != null) gpuTimer.close();
             poseBuffer = null;
             cache = null;
             shader = null;
-            gpuTimer = null;
             failed = true;
             RecruitsPerformance.LOGGER.error("Crowd renderer initialization failed", initializationFailure);
             return false;

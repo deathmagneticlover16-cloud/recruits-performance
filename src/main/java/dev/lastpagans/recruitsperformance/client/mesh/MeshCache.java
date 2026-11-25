@@ -42,13 +42,12 @@ public final class MeshCache implements AutoCloseable {
     private static final ResourceLocation ITEM_ATLAS = TextureAtlas.LOCATION_BLOCKS;
 
     private final LinkedHashMap<String, GpuMesh> meshes = new LinkedHashMap<>(64, 0.75F, true);
-    private final Set<String> equipmentMeshes = new java.util.HashSet<>();
     private final Map<String, String> armorGeometries = new java.util.HashMap<>();
 
     public MeshHandle body(HumanoidModel<?> model, ResourceLocation texture, boolean fullDetail) {
         String geometry = model.getClass().getName() + (fullDetail ? ":full" : ":lod");
         MeshKey key = new MeshKey(geometry, texture, -1, MeshKey.Kind.BODY);
-        return handle(key, geometry, texture, 0xFFFFFFFF, false,
+        return handle(key, geometry, texture, 0xFFFFFFFF,
                 () -> HumanoidMeshConverter.convert(model, fullDetail));
     }
 
@@ -56,7 +55,7 @@ public final class MeshCache implements AutoCloseable {
                                 boolean fullDetail) {
         String geometry = model.getClass().getName() + (fullDetail ? ":full" : ":lod");
         MeshKey key = new MeshKey(geometry, texture, -1, kind);
-        return handle(key, geometry, texture, 0xFFFFFFFF, false,
+        return handle(key, geometry, texture, 0xFFFFFFFF,
                 () -> HumanoidMeshConverter.convert(model, fullDetail));
     }
 
@@ -65,7 +64,7 @@ public final class MeshCache implements AutoCloseable {
         String geometry = "icy-horse:" + kind + ":" + model.getClass().getName() + ":"
                 + Integer.toHexString(System.identityHashCode(model)) + (fullDetail ? ":full" : ":lod");
         MeshKey key = new MeshKey(geometry, texture, -1, kind);
-        return handle(key, geometry, texture, tint, kind == MeshKey.Kind.HORSE_TACK,
+        return handle(key, geometry, texture, tint,
                 () -> HorseModelAdapter.convert(model, fullDetail));
     }
 
@@ -91,8 +90,6 @@ public final class MeshCache implements AutoCloseable {
         return result;
     }
 
-    public int size() { return meshes.size(); }
-    public int equipmentVariants() { return equipmentMeshes.size(); }
     public long bytes() {
         return meshes.values().stream().mapToLong(GpuMesh::bytes).sum();
     }
@@ -109,7 +106,6 @@ public final class MeshCache implements AutoCloseable {
             if (activeGeometry.contains(entry.getKey())) continue;
             currentBytes -= entry.getValue().bytes();
             entry.getValue().close();
-            equipmentMeshes.remove(entry.getKey());
             iterator.remove();
         }
     }
@@ -118,7 +114,6 @@ public final class MeshCache implements AutoCloseable {
     public void close() {
         meshes.values().forEach(GpuMesh::close);
         meshes.clear();
-        equipmentMeshes.clear();
         armorGeometries.clear();
     }
 
@@ -173,7 +168,7 @@ public final class MeshCache implements AutoCloseable {
         int tint = stack.getItem() instanceof DyeableLeatherItem dyeable
                 ? 0xFF000000 | dyeable.getColor(stack) : 0xFFFFFFFF;
         HumanoidModel<?> captured = model;
-        MeshHandle handle = handle(key, key.geometry(), texture, tint, true,
+        MeshHandle handle = handle(key, key.geometry(), texture, tint,
                 () -> {
                     if (captured == null) {
                         throw new IllegalStateException("Missing cached armor geometry: " + itemId);
@@ -193,7 +188,7 @@ public final class MeshCache implements AutoCloseable {
                     entity, stack, overlayDefault, slot, "overlay");
             ResourceLocation overlay = new ResourceLocation(overlayTexture);
             MeshKey overlayKey = new MeshKey(key.geometry(), overlay, -1, MeshKey.Kind.ARMOR_OVERLAY);
-            MeshHandle overlayHandle = handle(overlayKey, key.geometry(), overlay, 0xFFFFFFFF, true,
+            MeshHandle overlayHandle = handle(overlayKey, key.geometry(), overlay, 0xFFFFFFFF,
                     () -> captureArmor(captured, bodyModel, slot, itemId));
             if (overlayHandle == null) throw new IllegalStateException("Armor overlay produced no geometry: " + itemId);
             result.add(overlayHandle);
@@ -214,7 +209,7 @@ public final class MeshCache implements AutoCloseable {
                 (left ? "left" : "right") + ":" + using + ":" + charged + ":" + visualTag;
         MeshKey key = new MeshKey(geometry, texture,
                 left ? HumanoidMeshConverter.LEFT_ITEM : HumanoidMeshConverter.RIGHT_ITEM, kind);
-        MeshHandle handle = handle(key, geometry, texture, 0xFFFFFFFF, true,
+        MeshHandle handle = handle(key, geometry, texture, 0xFFFFFFFF,
                 () -> ItemMeshConverter.convertBase(entity, stack, left,
                         left ? bodyModel.leftArm : bodyModel.rightArm));
         if (handle == null) throw new IllegalStateException("Item model produced no geometry: " + itemId);
@@ -233,7 +228,7 @@ public final class MeshCache implements AutoCloseable {
         MeshKey stainKey = new MeshKey(stainGeometry, stain.texture(),
                 left ? HumanoidMeshConverter.LEFT_ITEM : HumanoidMeshConverter.RIGHT_ITEM, kind);
         MeshData precomputed = captured;
-        MeshHandle stainHandle = handle(stainKey, stainGeometry, stain.texture(), 0xFFFFFFFF, true,
+        MeshHandle stainHandle = handle(stainKey, stainGeometry, stain.texture(), 0xFFFFFFFF,
                 () -> precomputed == null
                         ? ItemMeshConverter.convertCruor(entity, stack, left,
                         left ? bodyModel.leftArm : bodyModel.rightArm)
@@ -241,7 +236,7 @@ public final class MeshCache implements AutoCloseable {
         if (stainHandle != null) result.add(stainHandle);
     }
 
-    private MeshHandle handle(MeshKey key, String geometry, ResourceLocation texture, int tint, boolean equipment,
+    private MeshHandle handle(MeshKey key, String geometry, ResourceLocation texture, int tint,
                               MeshFactory factory) {
         GpuMesh mesh = meshes.get(geometry);
         if (mesh == null) {
@@ -249,7 +244,6 @@ public final class MeshCache implements AutoCloseable {
             if (data.isEmpty()) return null;
             mesh = new GpuMesh(data);
             meshes.put(geometry, mesh);
-            if (equipment) equipmentMeshes.add(geometry);
         }
         boolean cull = key.kind() == MeshKey.Kind.MAIN_HAND
                 || key.kind() == MeshKey.Kind.OFF_HAND
@@ -295,7 +289,7 @@ public final class MeshCache implements AutoCloseable {
                 + Integer.toHexString(System.identityHashCode(model));
         ResourceLocation texture = EpicKnightsCompat.baseTexture(layer);
         MeshKey key = new MeshKey(geometry, texture, -1, MeshKey.Kind.DECORATION);
-        MeshHandle handle = handle(key, geometry, texture, 0xFFFFFFFF, true,
+        MeshHandle handle = handle(key, geometry, texture, 0xFFFFFFFF,
                 () -> HumanoidMeshConverter.convertAttached(model, bodyModel));
         if (handle == null) throw new IllegalStateException("Epic Knights surcoat model produced no geometry");
         result.add(handle);
@@ -311,7 +305,7 @@ public final class MeshCache implements AutoCloseable {
         float[] rgb = color.getTextureDiffuseColors();
         int tint = 0xFF000000 | ((int) (rgb[0] * 255.0F) << 16)
                 | ((int) (rgb[1] * 255.0F) << 8) | (int) (rgb[2] * 255.0F);
-        MeshHandle patternHandle = handle(key, geometry, texture, tint, true,
+        MeshHandle patternHandle = handle(key, geometry, texture, tint,
                 () -> { throw new IllegalStateException("Missing shared Epic Knights surcoat geometry"); });
         result.add(patternHandle);
     }
@@ -325,14 +319,14 @@ public final class MeshCache implements AutoCloseable {
         ResourceLocation texture = EpicKnightsCompat.texture(layer, location, false);
         MeshKey key = new MeshKey(geometry, texture, -1, MeshKey.Kind.DECORATION);
         int tint = dyeable ? 0xFF000000 | color : 0xFFFFFFFF;
-        MeshHandle base = handle(key, geometry, texture, tint, true,
+        MeshHandle base = handle(key, geometry, texture, tint,
                 () -> HumanoidMeshConverter.convertAttached(model, bodyModel));
         if (base == null) throw new IllegalStateException("Epic Knights decoration produced no geometry: " + location);
         result.add(base);
         if (dyeable) {
             ResourceLocation overlay = EpicKnightsCompat.texture(layer, location, true);
             MeshKey overlayKey = new MeshKey(geometry, overlay, -1, MeshKey.Kind.DECORATION_OVERLAY);
-            MeshHandle overlayHandle = handle(overlayKey, geometry, overlay, 0xFFFFFFFF, true,
+            MeshHandle overlayHandle = handle(overlayKey, geometry, overlay, 0xFFFFFFFF,
                     () -> { throw new IllegalStateException("Missing shared Epic Knights decoration geometry: " + location); });
             result.add(overlayHandle);
         }

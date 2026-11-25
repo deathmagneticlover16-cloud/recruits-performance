@@ -1,7 +1,6 @@
 package dev.lastpagans.recruitsperformance;
 
 import com.mojang.logging.LogUtils;
-import dev.lastpagans.recruitsperformance.config.PerformanceConfig;
 import dev.lastpagans.recruitsperformance.config.CrowdRendererConfig;
 import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
@@ -14,10 +13,9 @@ public final class RecruitsPerformance {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public RecruitsPerformance() {
-        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, PerformanceConfig.SPEC);
         ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, CrowdRendererConfig.SPEC,
                 "recruits-performance-client.toml");
-        LOGGER.info("Recruits Performance 1.0.0-alpha.14 loaded with GPU crowd rendering");
+        LOGGER.info("Recruits Performance 1.0.0-alpha.15 loaded with GPU crowd rendering");
     }
 }
 

@@ -1,6 +1,6 @@
 # Recruits Performance
 
-Recruits Performance is a Forge 1.20.1 client renderer and server performance runtime for Villager Recruits. Supported recruit visuals bypass `LivingEntityRenderer` after their visual state has been extracted and are drawn as shared GPU mesh instances at every distance.
+Recruits Performance is a Forge 1.20.1 client renderer for Villager Recruits. Supported recruit visuals bypass `LivingEntityRenderer` after their visual state has been extracted and are drawn as shared GPU mesh instances at every distance.
 
 The renderer converts the active Recruits humanoid `ModelPart` hierarchy into one reusable body mesh. Recruits biome, faction-cloth and companion-cloth materials reuse that same geometry as separate instanced batches. Armor is resolved through Forge's complete `ForgeHooksClient#getArmorModel` path, including the generic replacement-model property transfer used by Epic Knights 10.15 and compatible addons. Standard and custom humanoid armor therefore use the same automatic converter instead of an item whitelist, with every selected model-part subtree retained and dyed base/overlay materials sharing one converted geometry allocation. Main-hand and off-hand baked item geometry is captured once and attached to the animated arm bones. Dynamic equipment changes select a different cached component without rebuilding unrelated soldiers.
 
@@ -24,13 +24,13 @@ The compatibility baseline is Recruits 1.15.2, Recruits Serious Animations 0.13.
 ./gradlew clean build
 ```
 
-The distributable JAR is written to `build/libs/recruits-performance-1.20.1-1.0.0-alpha.14.jar`. The checked-in wrapper verifies Gradle 8.5 with its official SHA-256 checksum.
+The distributable JAR is written to `build/libs/recruits-performance-1.20.1-1.0.0-alpha.15.jar`. The checked-in wrapper verifies Gradle 8.5 with its official SHA-256 checksum.
 
 ## Install
 
-Place the built JAR in the client and server `mods` directories alongside Recruits. The GPU renderer is client-side; observational scheduling and the formation API remain available on both sides. The obsolete target-memory controller and its navigation commands have been removed.
+Place the built JAR in each player's client `mods` directory alongside Recruits. A dedicated server does not need Recruits Performance, and `displayTest="IGNORE_SERVER_VERSION"` allows clients to join without the server installing it. Minecraft already owns recruit AI, navigation, authoritative movement and entity synchronization on the server; this mod does not duplicate or override them.
 
-Client settings are generated at `config/recruits-performance-client.toml`. The renderer is enabled by default. Set `diagnostics=true` to display virtual instance, batch, draw, cache, VRAM-estimate, CPU submission and asynchronous GPU timer counters.
+Client settings are generated at `config/recruits-performance-client.toml`. The renderer is enabled by default.
 
 ## Rendering behavior
 
@@ -52,10 +52,10 @@ Client settings are generated at `config/recruits-performance-client.toml`. The 
 - Minecraft's depth buffer, camera matrices, fog, alpha cutout and live lightmap remain active for the crowd pass. The lightmap applies the same day/night, weather, dimension and gamma response used by ordinary entity rendering.
 - Recruits RTS movement hints and ordinary entity combat/use state select GPU animation states without changing server-authoritative gameplay.
 
-The observational AI scheduler, simulation tiers and deterministic formation API remain in the project. Their server commands continue under `/recruitsperf`.
+Rendering, pose sampling, camera visibility, texture selection and GPU submission depend on each player's camera, resource packs and client-only animation/shader mods, so they cannot be moved to a dedicated server without replacing them with a high-bandwidth pose-streaming protocol. The removed server scheduler, simulation tiers, Formation API and `/recruitsperf` diagnostics did not perform production work.
 
 See [BENCHMARKING.md](BENCHMARKING.md) for the reproducible 300–2,000-soldier protocol and [TESTING.md](TESTING.md) for verification steps.
 
 ## Known limits
 
-Animated geometry supplied only through an unsupported procedural renderer keeps its original renderer and increments the fallback counter. Camera-frustum acceptance remains Minecraft's conservative entity culling; this release does not add compute/indirect occlusion culling or impostors. Distant Horizons renders terrain rather than living entities, so soldier and horse LOD selection remains in Recruits Performance while using the extended terrain view around them. Shader-pack visual equivalence and RX 570 performance still require an actual modded client/GPU run; the cloud source environment cannot emulate those results.
+Animated geometry supplied only through an unsupported procedural renderer keeps its original renderer and logs the fallback once. Camera-frustum acceptance remains Minecraft's conservative entity culling; this release does not add compute/indirect occlusion culling or impostors. Distant Horizons renders terrain rather than living entities, so soldier and horse LOD selection remains in Recruits Performance while using the extended terrain view around them. Shader-pack visual equivalence and RX 570 performance still require an actual modded client/GPU run; the cloud source environment cannot emulate those results.

@@ -7,7 +7,6 @@ public final class CrowdRendererConfig {
 
     public static final ForgeConfigSpec.BooleanValue enabled;
     public static final ForgeConfigSpec.BooleanValue gpuAnimation;
-    public static final ForgeConfigSpec.BooleanValue diagnostics;
     public static final ForgeConfigSpec.IntValue maximumInstances;
     public static final ForgeConfigSpec.DoubleValue renderDistance;
     public static final ForgeConfigSpec.DoubleValue geometryLodDistance;
@@ -21,8 +20,6 @@ public final class CrowdRendererConfig {
                 .define("enabled", true);
         gpuAnimation = builder.comment("Evaluate shared skeletal animation in the vertex shader.")
                 .define("gpuAnimation", true);
-        diagnostics = builder.comment("Show crowd-renderer counters in the debug overlay.")
-                .define("diagnostics", false);
         maximumInstances = builder.comment("Hard safety limit for visible virtual soldiers.")
                 .defineInRange("maximumInstances", 8192, 128, 32768);
         renderDistance = builder.comment("Maximum crowd-render distance in blocks.")

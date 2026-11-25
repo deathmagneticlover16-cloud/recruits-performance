@@ -3,6 +3,6 @@ Specification-Title: Recruits Performance
 Specification-Vendor: Last Pagans
 Specification-Version: 1
 Implementation-Title: recruits-performance
-Implementation-Version: 1.0.0-alpha.14
+Implementation-Version: 1.0.0-alpha.15
 Implementation-Vendor: Last Pagans
 

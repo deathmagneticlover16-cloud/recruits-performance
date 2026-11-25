@@ -7,8 +7,9 @@ modId="recruitsperformance"
 version="${file.jarVersion}"
 displayName="Recruits Performance"
 authors="Last Pagans"
+displayTest="IGNORE_SERVER_VERSION"
 description='''
-GPU-instanced crowd renderer and performance runtime for Villager Recruits.
+GPU-instanced crowd renderer for Villager Recruits.
 Supported soldiers are converted into shared body, armor and equipment meshes,
 animated on the GPU, and submitted in material-aware instance batches.
 '''
@@ -32,5 +33,5 @@ modId="recruits"
 mandatory=true
 versionRange="[1.15.2,)"
 ordering="AFTER"
-side="BOTH"
+side="CLIENT"
 

@@ -1,3 +1,12 @@
+# 1.0.0 Alpha 15
+
+- Removed the unused Formation API, formation geometry/assignment helpers, RTS movement-authority state and its documentation; Recruits Performance no longer advertises a tactical interface that has no production consumer.
+- Removed client diagnostics configuration, HUD counters, GPU timer queries, server telemetry, `/recruitsperf` commands and periodic diagnostic logging.
+- Removed the inert server scheduler, simulation-tier registry and event listeners after verifying that production code never queued or executed their advertised observation work. Native Recruits remains the sole authority for AI, navigation, movement and entity synchronization.
+- Marked the mod as client-optional with `displayTest="IGNORE_SERVER_VERSION"` and a client-side Recruits dependency, so dedicated servers no longer need to install Recruits Performance.
+- Documented why camera-, resource-, animation- and GPU-dependent crowd work cannot be profitably shifted to the server without a high-bandwidth pose-streaming protocol.
+- Bumped the mod to `1.0.0-alpha.15`.
+
 # 1.0.0 Alpha 14
 
 - Replaced the crowd shader's `max(blockLight, skyLight)` approximation with Minecraft's live 16×16 lightmap texture, fixing recruits that remained full-bright outdoors at night.
