@@ -91,6 +91,9 @@ public final class BetterCombatCompat {
         List<?> layers = null;
         List<RemovedLayer> removed = new ArrayList<>(1);
         try {
+            // SPA's action layer owns eating, drinking, blocking, bow and crossbow poses too.
+            // It only conflicts while Better Mob Combat is actively supplying an attack pose.
+            if (!(boolean) entityAccess.get().activeCombat().invoke(entity)) return AnimationScope.EMPTY;
             Object stack = entityAccess.get().animationStack().invoke(entity);
             if (stack == null) return AnimationScope.EMPTY;
             Optional<StackAccess> stackAccess = STACK_ACCESS.get(stack.getClass());

@@ -1,3 +1,11 @@
+# 1.0.0 Alpha 16
+
+- Fixed the reported Java compilation failure by removing the obsolete `equipment` field from `MeshHandle` and its stale constructor argument after diagnostics removal.
+- Split Betsy Ross flag and banner standard capture into a block-atlas pole pass and an Immersive Paintings dynamic-texture cloth pass, preventing the selected painting UVs from sampling the entire Minecraft atlas.
+- Preserved the complete Recruits Serious Animations 0.13.7 action layer outside active Better Mob Combat attacks, restoring eating, drinking, blocking, bow, crossbow and other specialty actions while retaining Better Combat authority during real attacks.
+- Corrected the Oculus/Forge ordering assumption: Oculus completes its final composite in `LevelRenderer`'s return injection before Forge posts `AFTER_LEVEL`. The instanced crowd now draws directly at that post-composite stage while world depth remains intact instead of being postponed into GUI rendering.
+- Bumped the mod to `1.0.0-alpha.16`.
+
 # 1.0.0 Alpha 15
 
 - Removed the unused Formation API, formation geometry/assignment helpers, RTS movement-authority state and its documentation; Recruits Performance no longer advertises a tactical interface that has no production consumer.

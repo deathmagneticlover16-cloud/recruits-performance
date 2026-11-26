@@ -65,7 +65,6 @@ public final class CrowdRenderer {
     private CrowdShader shader;
     private CrowdPoseBuffer poseBuffer;
     private boolean failed;
-    private FrameContext deferredShaderFrame;
 
     public static CrowdRenderer get() { return INSTANCE; }
 
@@ -180,23 +179,15 @@ public final class CrowdRenderer {
         boolean shaderPack = ShaderPackCompat.isShaderPackActive();
         if (shaderPack) {
             if (stage == RenderLevelStageEvent.Stage.AFTER_LEVEL && !batches.isEmpty() && !failed) {
-                // Oculus runs its final composite after Forge's AFTER_LEVEL stage. Drawing here
-                // makes a valid instanced crowd briefly, then the composite overwrites it. Keep
-                // the world matrices and submit to the main target immediately before the GUI.
-                deferredShaderFrame = FrameContext.capture(event);
+                // Oculus finalizes its level pipeline from LevelRenderer's RETURN injection.
+                // Forge posts AFTER_LEVEL only after that method has returned, so this is already
+                // post-composite and still precedes hand/HUD rendering with world depth intact.
+                renderFrame(FrameContext.capture(event), true);
             }
             return;
         }
         if (stage != RenderLevelStageEvent.Stage.AFTER_ENTITIES || batches.isEmpty() || failed) return;
-        deferredShaderFrame = null;
         renderFrame(FrameContext.capture(event), false);
-    }
-
-    public void renderDeferredShaderCrowd() {
-        FrameContext frame = deferredShaderFrame;
-        if (frame == null || batches.isEmpty() || failed) return;
-        deferredShaderFrame = null;
-        renderFrame(frame, true);
     }
 
     private void renderFrame(FrameContext frame, boolean bindMainTarget) {
@@ -265,7 +256,6 @@ public final class CrowdRenderer {
             poses.clear();
             nameplates.clear();
             cruorWounds.clear();
-            deferredShaderFrame = null;
         }
     }
 
@@ -279,7 +269,6 @@ public final class CrowdRenderer {
             nameplates.clear();
             cruorWounds.clear();
             CruorBodyCompat.clear();
-            deferredShaderFrame = null;
             if (cache != null) cache.close();
             if (shader != null) shader.close();
             if (poseBuffer != null) poseBuffer.close();
@@ -411,19 +400,18 @@ public final class CrowdRenderer {
         resetGpuState();
     }
 
-    private void renderCompatibilityLayers(FrameContext frame, boolean deferredShaderPass) {
-        if (!deferredShaderPass) {
+    private void renderCompatibilityLayers(FrameContext frame, boolean shaderPackPass) {
+        if (!shaderPackPass) {
             renderCruorWounds(frame);
             renderNameplates(frame);
             return;
         }
 
-        // The Oculus crowd pass is intentionally deferred until RenderGuiEvent.Pre, after its
-        // final composite. At that point Minecraft has already installed the GUI projection and
-        // model-view matrices. Our instancing shader receives the saved world matrices directly,
-        // but Cruor and font RenderTypes use RenderSystem's globals. Temporarily restore the saved
-        // world projection and an identity model-view (the submitted vertices already contain
-        // frame.view), then put the GUI state back before returning to Forge's GUI pipeline.
+        // Oculus' final pass is allowed to leave its fullscreen projection/model-view installed.
+        // Our instancing shader receives the event's world matrices directly, but Cruor and font
+        // RenderTypes use RenderSystem globals. Temporarily install the saved world projection and
+        // an identity model-view (their submitted vertices already contain frame.view), then
+        // restore the post-composite state before hand and HUD rendering continue.
         Matrix4f previousProjection = new Matrix4f(RenderSystem.getProjectionMatrix());
         VertexSorting previousSorting = RenderSystem.getVertexSorting();
         RenderSystem.getModelViewStack().pushPose();

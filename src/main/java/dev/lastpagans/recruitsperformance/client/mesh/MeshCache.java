@@ -1,6 +1,7 @@
 package dev.lastpagans.recruitsperformance.client.mesh;
 
 import dev.lastpagans.recruitsperformance.RecruitsPerformance;
+import dev.lastpagans.recruitsperformance.client.compat.BetsyRossCompat;
 import dev.lastpagans.recruitsperformance.client.compat.CruorCompat;
 import dev.lastpagans.recruitsperformance.client.compat.EpicKnightsCompat;
 import dev.lastpagans.recruitsperformance.client.compat.HumanoidArmorCompat;
@@ -201,6 +202,7 @@ public final class MeshCache implements AutoCloseable {
         if (stack.isEmpty()) return;
         if (stack.hasFoil()) throw new IllegalStateException("Foil item requires the vanilla glint pass");
         ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(stack.getItem());
+        ResourceLocation standardTexture = BetsyRossCompat.standardTexture(stack);
         ResourceLocation texture = stack.getItem() instanceof ShieldItem ? Sheets.SHIELD_SHEET : ITEM_ATLAS;
         boolean using = entity.isUsingItem() && entity.getUseItem() == stack;
         boolean charged = stack.getItem() instanceof CrossbowItem && CrossbowItem.isCharged(stack);
@@ -214,6 +216,18 @@ public final class MeshCache implements AutoCloseable {
                         left ? bodyModel.leftArm : bodyModel.rightArm));
         if (handle == null) throw new IllegalStateException("Item model produced no geometry: " + itemId);
         result.add(handle);
+        if (standardTexture != null) {
+            String paintingGeometry = geometry + ":betsyross-painting:" + standardTexture;
+            MeshKey paintingKey = new MeshKey(paintingGeometry, standardTexture,
+                    left ? HumanoidMeshConverter.LEFT_ITEM : HumanoidMeshConverter.RIGHT_ITEM, kind);
+            MeshHandle painting = handle(paintingKey, paintingGeometry, standardTexture, 0xFFFFFFFF,
+                    () -> ItemMeshConverter.convertBetsyRossPainting(entity, stack, left,
+                            left ? bodyModel.leftArm : bodyModel.rightArm, standardTexture));
+            if (painting == null) {
+                throw new IllegalStateException("Betsy Ross renderer produced no painting geometry: " + itemId);
+            }
+            result.add(painting);
+        }
         if (!cruorDetail) return;
         CruorCompat.Stain stain = CruorCompat.stain(entity, stack);
         if (stain == null) return;
@@ -249,7 +263,7 @@ public final class MeshCache implements AutoCloseable {
                 || key.kind() == MeshKey.Kind.OFF_HAND
                 || key.kind() == MeshKey.Kind.HORSE_BODY
                 || key.kind() == MeshKey.Kind.IMPOSTOR;
-        return new MeshHandle(key, mesh, texture, tint, equipment, cull);
+        return new MeshHandle(key, mesh, texture, tint, cull);
     }
 
     private void decorations(ItemStack stack, EpicKnightsCompat.Layer epicLayer,

@@ -10,6 +10,7 @@ import net.minecraft.client.model.geom.PartPose;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
@@ -21,23 +22,34 @@ public final class ItemMeshConverter {
     private ItemMeshConverter() {}
 
     public static MeshData convertBase(LivingEntity entity, ItemStack stack, boolean leftHand, ModelPart arm) {
-        return convert(entity, stack, leftHand, arm, false);
+        return convert(entity, stack, leftHand, arm, CapturePass.BASE, null);
     }
 
     public static MeshData convertCruor(LivingEntity entity, ItemStack stack, boolean leftHand, ModelPart arm) {
-        return convert(entity, stack, leftHand, arm, true);
+        return convert(entity, stack, leftHand, arm, CapturePass.CRUOR, null);
+    }
+
+    public static MeshData convertBetsyRossPainting(LivingEntity entity, ItemStack stack, boolean leftHand,
+                                                     ModelPart arm, ResourceLocation texture) {
+        return convert(entity, stack, leftHand, arm, CapturePass.BETSY_ROSS_PAINTING, texture);
     }
 
     private static MeshData convert(LivingEntity entity, ItemStack stack, boolean leftHand, ModelPart arm,
-                                    boolean cruorPass) {
+                                    CapturePass pass, ResourceLocation texture) {
         MeshData.Builder builder = new MeshData.Builder();
         CaptureVertexConsumer consumer = new CaptureVertexConsumer(builder);
         PartPose bind = arm.getInitialPose();
         consumer.bone(leftHand ? HumanoidMeshConverter.LEFT_ITEM : HumanoidMeshConverter.RIGHT_ITEM);
         consumer.pivot(bind.x / 16.0F, bind.y / 16.0F, bind.z / 16.0F);
         MultiBufferSource buffers = renderType -> {
-            boolean dynamic = isDynamicForeignPass(renderType);
-            return dynamic == cruorPass ? consumer : DISCARD;
+            boolean cruor = isCruorPass(renderType);
+            boolean painting = isBetsyRossPaintingPass(renderType, texture);
+            boolean capture = switch (pass) {
+                case BASE -> !cruor && !painting;
+                case CRUOR -> cruor;
+                case BETSY_ROSS_PAINTING -> painting;
+            };
+            return capture ? consumer : DISCARD;
         };
         PoseStack pose = new PoseStack();
         pose.translate(bind.x / 16.0F, bind.y / 16.0F, bind.z / 16.0F);
@@ -55,11 +67,21 @@ public final class ItemMeshConverter {
         return data;
     }
 
-    private static boolean isDynamicForeignPass(RenderType renderType) {
+    private static boolean isCruorPass(RenderType renderType) {
         String name = renderType.toString().toLowerCase(java.util.Locale.ROOT);
         return name.contains("cruor_gear") || name.contains("cruor_wound")
                 || name.contains("cruor_armour_wound") || name.contains("cruor_layer_wound");
     }
+
+    private static boolean isBetsyRossPaintingPass(RenderType renderType, ResourceLocation texture) {
+        String name = renderType.toString().toLowerCase(java.util.Locale.ROOT);
+        // Dynamic registrations use minecraft:dynamic/immersive_painting/* while the loading
+        // placeholder uses immersive_paintings:textures/*. Both must stay off the block atlas.
+        if (!name.contains("immersive_painting")) return false;
+        return texture == null || name.contains(texture.toString().toLowerCase(java.util.Locale.ROOT));
+    }
+
+    private enum CapturePass { BASE, CRUOR, BETSY_ROSS_PAINTING }
 
     private static final class DiscardingVertexConsumer extends DefaultedVertexConsumer {
         @Override public VertexConsumer vertex(double x, double y, double z) { return this; }

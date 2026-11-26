@@ -5,4 +5,4 @@ import dev.lastpagans.recruitsperformance.client.scene.MeshKey;
 import net.minecraft.resources.ResourceLocation;
 
 public record MeshHandle(MeshKey key, GpuMesh mesh, ResourceLocation texture, int tint,
-                         boolean equipment, boolean cull) {}
+                         boolean cull) {}
