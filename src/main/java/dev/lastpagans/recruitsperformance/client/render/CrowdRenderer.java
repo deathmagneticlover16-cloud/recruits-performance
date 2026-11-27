@@ -7,6 +7,8 @@ import com.mojang.math.Axis;
 import dev.lastpagans.recruitsperformance.RecruitsPerformance;
 import dev.lastpagans.recruitsperformance.client.compat.BetterCombatCompat;
 import dev.lastpagans.recruitsperformance.client.compat.CruorBodyCompat;
+import dev.lastpagans.recruitsperformance.client.compat.DistantHorizonsCompat;
+import dev.lastpagans.recruitsperformance.client.compat.EmbeddiumCompat;
 import dev.lastpagans.recruitsperformance.client.compat.IcysHorsesCompat;
 import dev.lastpagans.recruitsperformance.client.compat.ShaderPackCompat;
 import dev.lastpagans.recruitsperformance.client.gpu.CrowdShader;
@@ -25,10 +27,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
 import org.joml.Matrix4f;
@@ -65,8 +69,11 @@ public final class CrowdRenderer {
     private CrowdShader shader;
     private CrowdPoseBuffer poseBuffer;
     private boolean failed;
+    private boolean worldEntityPass;
 
     public static CrowdRenderer get() { return INSTANCE; }
+
+    public boolean acceptsWorldSubmission() { return worldEntityPass; }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     public boolean submit(LivingEntity entity, LivingEntityRenderer renderer, float partialTick, int packedLight) {
@@ -79,7 +86,8 @@ public final class CrowdRenderer {
         if (submittedEntities.size() >= CrowdRendererConfig.maximumInstances.get()) return false;
         Minecraft minecraft = Minecraft.getInstance();
         double distanceSquared = minecraft.gameRenderer.getMainCamera().getPosition().distanceToSqr(entity.position());
-        if (distanceSquared > CrowdRendererConfig.renderDistance.get() * CrowdRendererConfig.renderDistance.get()) return false;
+        double renderDistance = DistantHorizonsCompat.renderDistance(CrowdRendererConfig.renderDistance.get());
+        if (distanceSquared > renderDistance * renderDistance) return false;
         Object sourceModel = renderer.getModel();
         if (IcysHorsesCompat.isMountedRecruitHorse(entity) && HorseModelAdapter.supports(sourceModel)) {
             if (!CrowdRendererConfig.gpuAnimation.get()) return false;
@@ -174,8 +182,13 @@ public final class CrowdRenderer {
 
     public void render(RenderLevelStageEvent event) {
         RenderLevelStageEvent.Stage stage = event.getStage();
+        if (stage == RenderLevelStageEvent.Stage.AFTER_SKY) {
+            worldEntityPass = true;
+            return;
+        }
         if (stage != RenderLevelStageEvent.Stage.AFTER_ENTITIES
                 && stage != RenderLevelStageEvent.Stage.AFTER_LEVEL) return;
+        if (stage == RenderLevelStageEvent.Stage.AFTER_ENTITIES) submitDistantRecruits(event);
         boolean shaderPack = ShaderPackCompat.isShaderPackActive();
         if (shaderPack) {
             if (stage == RenderLevelStageEvent.Stage.AFTER_LEVEL && !batches.isEmpty() && !failed) {
@@ -184,15 +197,44 @@ public final class CrowdRenderer {
                 // post-composite and still precedes hand/HUD rendering with world depth intact.
                 renderFrame(FrameContext.capture(event), true);
             }
+            if (stage == RenderLevelStageEvent.Stage.AFTER_LEVEL) worldEntityPass = false;
             return;
         }
-        if (stage != RenderLevelStageEvent.Stage.AFTER_ENTITIES || batches.isEmpty() || failed) return;
-        renderFrame(FrameContext.capture(event), false);
+        if (stage == RenderLevelStageEvent.Stage.AFTER_ENTITIES && !batches.isEmpty() && !failed) {
+            renderFrame(FrameContext.capture(event), false);
+        }
+        if (stage == RenderLevelStageEvent.Stage.AFTER_LEVEL) worldEntityPass = false;
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private void submitDistantRecruits(RenderLevelStageEvent event) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.level == null || failed || !CrowdRendererConfig.enabled.get()) return;
+        Vec3 camera = event.getCamera().getPosition();
+        double embeddiumDistance = minecraft.options.getEffectiveRenderDistance() * 16.0D;
+        double embeddiumDistanceSquared = embeddiumDistance * embeddiumDistance;
+        for (Entity candidate : minecraft.level.entitiesForRendering()) {
+            if (!(candidate instanceof LivingEntity entity) || submittedEntities.contains(entity.getId())
+                    || fallbackEntities.contains(entity.getId())) continue;
+            if (!RecruitIntrospector.isRecruit(entity) && !IcysHorsesCompat.isMountedRecruitHorse(entity)) continue;
+            if (!event.getFrustum().isVisible(entity.getBoundingBoxForCulling())) continue;
+            // Embeddium has no render-section visibility outside its own chunk radius. Reuse its
+            // occlusion result only where that result is defined; DH depth handles the far field.
+            if (camera.distanceToSqr(entity.position()) <= embeddiumDistanceSquared
+                    && !EmbeddiumCompat.isVisible(entity)) continue;
+            EntityRenderer renderer = minecraft.getEntityRenderDispatcher().getRenderer(entity);
+            if (!(renderer instanceof LivingEntityRenderer livingRenderer)) continue;
+            int packedLight = renderer.getPackedLightCoords(entity, event.getPartialTick());
+            submit(entity, livingRenderer, event.getPartialTick(), packedLight);
+        }
     }
 
     private void renderFrame(FrameContext frame, boolean bindMainTarget) {
         boolean lightLayerEnabled = false;
         try {
+            // Forge stage renderers, including Corpsebound, may still have vertices queued in the
+            // shared BufferSource. Flush them before raw GL changes VAOs, programs and textures.
+            Minecraft.getInstance().renderBuffers().bufferSource().endBatch();
             // Oculus' final pass leaves the completed scene in Minecraft's main target. Rebind it
             // explicitly because a shader pack is free to leave another framebuffer active.
             if (bindMainTarget) Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
@@ -276,6 +318,7 @@ public final class CrowdRenderer {
             shader = null;
             poseBuffer = null;
             failed = false;
+            worldEntityPass = false;
         };
         if (RenderSystem.isOnRenderThread()) close.run(); else RenderSystem.recordRenderCall(close::run);
     }

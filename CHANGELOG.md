@@ -1,3 +1,11 @@
+# 1.0.0 Alpha 17
+
+- Added a recruit-only loaded-entity sweep so troops skipped by vanilla's short entity-render decision still enter the existing GPU-instanced batches. The sweep is capped by both the crowd configuration and Distant Horizons 3.3.3's active chunk distance, reuses Minecraft frustum testing, and honors Embeddium 0.3.31 entity occlusion inside Embeddium's own render-section radius without treating its undefined far field as occluded.
+- Restricted `RenderLivingEvent` interception to the active world-entity pass, preventing recruit GUI previews from being canceled, submitted into the world batch and projected onto their world entity.
+- Resampled Betsy Ross standard cloth from Betsy Ross's own renderer once per visual frame, retaining its configured native wave geometry instead of freezing the first captured frame or adding a replacement curve.
+- Preserved live VAO/VBO bindings around mesh creation and animated geometry updates, and flushed Forge's shared entity buffer before raw instanced draws. This prevents equipment changes and item-pickup frames from invalidating Corpsebound's queued ragdoll geometry.
+- Bumped the mod to `1.0.0-alpha.17`.
+
 # 1.0.0 Alpha 16
 
 - Fixed the reported Java compilation failure by removing the obsolete `equipment` field from `MeshHandle` and its stale constructor argument after diagnostics removal.

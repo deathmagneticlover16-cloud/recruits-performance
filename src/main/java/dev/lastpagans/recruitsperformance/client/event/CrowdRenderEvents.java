@@ -28,7 +28,8 @@ public final class CrowdRenderEvents {
         @SubscribeEvent(priority = EventPriority.HIGHEST)
         public static void beforeLiving(RenderLivingEvent.Pre<?, ?> event) {
             LivingEntity entity = event.getEntity();
-            if (event.isCanceled() || (!RecruitIntrospector.isRecruit(entity)
+            if (event.isCanceled() || !CrowdRenderer.get().acceptsWorldSubmission()
+                    || (!RecruitIntrospector.isRecruit(entity)
                     && !IcysHorsesCompat.isMountedRecruitHorse(entity))) return;
             if (CrowdRenderer.get().submit(entity, event.getRenderer(), event.getPartialTick(), event.getPackedLight())) {
                 event.setCanceled(true);

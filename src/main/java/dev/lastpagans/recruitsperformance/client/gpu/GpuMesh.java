@@ -9,6 +9,7 @@ import java.nio.IntBuffer;
 import java.util.List;
 
 import static org.lwjgl.opengl.GL15C.*;
+import static org.lwjgl.opengl.GL11C.glGetInteger;
 import static org.lwjgl.opengl.GL20C.*;
 import static org.lwjgl.opengl.GL30C.*;
 import static org.lwjgl.opengl.GL31C.glDrawElementsInstanced;
@@ -30,6 +31,8 @@ public final class GpuMesh implements AutoCloseable {
     public GpuMesh(MeshData data) {
         this.indexCount = data.indices().length;
         this.geometryBytes = data.bytes();
+        int previousVao = glGetInteger(GL_VERTEX_ARRAY_BINDING);
+        int previousArrayBuffer = glGetInteger(GL_ARRAY_BUFFER_BINDING);
         vao = glGenVertexArrays();
         vertexBuffer = glGenBuffers();
         indexBuffer = glGenBuffers();
@@ -68,7 +71,28 @@ public final class GpuMesh implements AutoCloseable {
         instanceAttribute(12, 1, 12 * Float.BYTES);
         instanceAttribute(13, 1, 13 * Float.BYTES);
         instanceAttribute(14, 4, 14 * Float.BYTES);
-        glBindVertexArray(0);
+        // Mesh conversion happens inside RenderLivingEvent.Pre. Preserve the renderer's live
+        // bindings so a newly encountered item cannot corrupt another mod's buffered geometry.
+        glBindVertexArray(previousVao);
+        glBindBuffer(GL_ARRAY_BUFFER, previousArrayBuffer);
+    }
+
+    /** Replaces positions/normals sampled from a foreign animated renderer without changing topology. */
+    public void updateGeometry(MeshData data) {
+        if (data.indices().length != indexCount) {
+            throw new IllegalArgumentException("Animated mesh topology changed from " + indexCount
+                    + " to " + data.indices().length + " indices");
+        }
+        int previousArrayBuffer = glGetInteger(GL_ARRAY_BUFFER_BINDING);
+        FloatBuffer vertices = MemoryUtil.memAllocFloat(data.vertices().length);
+        try {
+            vertices.put(data.vertices()).flip();
+            glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
+            glBufferData(GL_ARRAY_BUFFER, vertices, GL_STREAM_DRAW);
+        } finally {
+            glBindBuffer(GL_ARRAY_BUFFER, previousArrayBuffer);
+            MemoryUtil.memFree(vertices);
+        }
     }
 
     public void upload(List<InstanceData> instances) {

@@ -16,7 +16,7 @@ Each recruit's native model and Mob Player Animator stack is sampled at stable t
 - Villager Recruits 1.15.2 or newer compatible 1.20.1 build
 - OpenGL 3.3 or newer; OpenGL 4.6 hardware is recommended
 
-The compatibility baseline is Recruits 1.15.2, Recruits Serious Animations 0.13.7, Mob Player Animator 1.3.3, Serious Player Animations 1.1.1, Better Mob Combat Recruits Fix 1.3.1, Better Combat 1.8.6, Icy's Better Horses 2.1.6, Oculus 1.8.0, Betsy Ross 2.1.2, Immersive Paintings 0.6.13, Last Pagans Assorted Fixes 1.2.3, Recruits RTS Camera 0.24.5-server.1, the supplied Epic Knights Addon 2.6, Dark Ages 1.1, Slavic Armory 2.1 and Antique Legacy 1.13 builds, plus 7 Years War Uniforms 1.4.2, Victorian Uniforms 1.0.0 and SYW USA 1.0.0. Integrations remain reflection-only so those client visual mods are not hard server dependencies.
+The compatibility baseline is Recruits 1.15.2, Recruits Serious Animations 0.13.7, Mob Player Animator 1.3.3, Serious Player Animations 1.1.1, Better Mob Combat Recruits Fix 1.3.1, Better Combat 1.8.6, Icy's Better Horses 2.1.6, Oculus 1.8.0, Embeddium 0.3.31, Distant Horizons 3.3.3, Corpsebound 0.3.2, Betsy Ross 2.1.2, Immersive Paintings 0.6.13, Last Pagans Assorted Fixes 1.2.3, Recruits RTS Camera 0.24.5-server.1, the supplied Epic Knights Addon 2.6, Dark Ages 1.1, Slavic Armory 2.1 and Antique Legacy 1.13 builds, plus 7 Years War Uniforms 1.4.2, Victorian Uniforms 1.0.0 and SYW USA 1.0.0. Integrations remain reflection-only so those client visual mods are not hard server dependencies.
 
 ## Build
 
@@ -24,7 +24,7 @@ The compatibility baseline is Recruits 1.15.2, Recruits Serious Animations 0.13.
 ./gradlew clean build
 ```
 
-The distributable JAR is written to `build/libs/recruits-performance-1.20.1-1.0.0-alpha.16.jar`. The checked-in wrapper verifies Gradle 8.5 with its official SHA-256 checksum.
+The distributable JAR is written to `build/libs/recruits-performance-1.20.1-1.0.0-alpha.17.jar`. The checked-in wrapper verifies Gradle 8.5 with its official SHA-256 checksum.
 
 ## Install
 
@@ -47,6 +47,8 @@ Client settings are generated at `config/recruits-performance-client.toml`. The 
 - Mounted Icy's Better Horses 2.1.6 entities retain all 16 native horse-part transforms plus reusable body/tack meshes when carrying a recruit. Riders consume Icy's published saddle translation, pitch and roll instead of a hand-authored mount animation. Stabilizers, banners and optional horn layers retain the source renderer.
 - Cruor-bloodied weapons retain a shared base mesh plus a correctly textured dynamic stain pass. Wounded living recruits keep their instanced body and equipment while Cruor's registered wound layer performs its own hit placement, stacked-UV remapping, drying and texture upload after the crowd draw. Recruits cloth/biome material textures are registered with Cruor before wound settlement, and unique Cruor detail is omitted beyond its configured distance.
 - Betsy Ross flag and banner standards split their captured pole-atlas geometry from the selected Immersive Paintings dynamic texture, so a standard never samples the entire Minecraft block atlas.
+- Loaded recruits that vanilla omits from the ordinary entity-render loop are recovered by a recruit-only world sweep and remain GPU-instanced up to the configured crowd distance, bounded by Distant Horizons' active chunk distance. Minecraft frustum testing remains authoritative, and Embeddium's entity-occlusion result is reused inside Embeddium's own render-section radius; DH-integrated depth handles the farther terrain field.
+- Betsy Ross cloth geometry is resampled from Betsy Ross's own configured renderer once per visual frame, preserving its native wave implementation without a replacement animation.
 - Only Villager Recruits units under the crosshair use the instanced nameplate queue; mounts and unrelated entities never enter it.
 - Resource reload destroys all GPU objects and lazily rebuilds them from the newly baked models.
 - Shader initialization writes the exact minimal and crowd GLSL sources to `logs/recruits-performance-shaders`, records their types, byte lengths and SHA-256 digests, and uses guarded NUL-terminated native buffers for AMD driver safety.
@@ -59,4 +61,4 @@ See [BENCHMARKING.md](BENCHMARKING.md) for the reproducible 300–2,000-soldier 
 
 ## Known limits
 
-Animated geometry supplied only through an unsupported procedural renderer keeps its original renderer and logs the fallback once. Camera-frustum acceptance remains Minecraft's conservative entity culling; this release does not add compute/indirect occlusion culling or impostors. Distant Horizons renders terrain rather than living entities, so soldier and horse LOD selection remains in Recruits Performance while using the extended terrain view around them. Shader-pack visual equivalence and RX 570 performance still require an actual modded client/GPU run; the cloud source environment cannot emulate those results.
+Animated geometry supplied only through an unsupported procedural renderer keeps its original renderer and logs the fallback once. This release does not add a replacement animation system, compute/indirect occlusion culling or impostors. Distant Horizons still renders terrain rather than living entities; Recruits Performance uses its active distance as the terrain envelope and submits only loaded recruit entities, with Minecraft frustum testing, Embeddium near-field occlusion and the existing DH depth integration deciding visibility. Shader-pack visual equivalence and RX 570 performance still require an actual modded client/GPU run; the cloud source environment cannot emulate those results.

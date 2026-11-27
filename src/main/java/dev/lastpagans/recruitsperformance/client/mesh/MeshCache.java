@@ -8,6 +8,7 @@ import dev.lastpagans.recruitsperformance.client.compat.HumanoidArmorCompat;
 import dev.lastpagans.recruitsperformance.client.gpu.GpuMesh;
 import dev.lastpagans.recruitsperformance.client.scene.MeshKey;
 import dev.lastpagans.recruitsperformance.config.CrowdRendererConfig;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.Model;
 import net.minecraft.client.renderer.Sheets;
@@ -44,6 +45,7 @@ public final class MeshCache implements AutoCloseable {
 
     private final LinkedHashMap<String, GpuMesh> meshes = new LinkedHashMap<>(64, 0.75F, true);
     private final Map<String, String> armorGeometries = new java.util.HashMap<>();
+    private final Map<String, Long> animatedGeometryFrames = new java.util.HashMap<>();
 
     public MeshHandle body(HumanoidModel<?> model, ResourceLocation texture, boolean fullDetail) {
         String geometry = model.getClass().getName() + (fullDetail ? ":full" : ":lod");
@@ -107,6 +109,7 @@ public final class MeshCache implements AutoCloseable {
             if (activeGeometry.contains(entry.getKey())) continue;
             currentBytes -= entry.getValue().bytes();
             entry.getValue().close();
+            animatedGeometryFrames.remove(entry.getKey());
             iterator.remove();
         }
     }
@@ -116,6 +119,7 @@ public final class MeshCache implements AutoCloseable {
         meshes.values().forEach(GpuMesh::close);
         meshes.clear();
         armorGeometries.clear();
+        animatedGeometryFrames.clear();
     }
 
     private void armor(LivingEntity entity, LivingEntityRenderer<?, ?> renderer,
@@ -220,7 +224,10 @@ public final class MeshCache implements AutoCloseable {
             String paintingGeometry = geometry + ":betsyross-painting:" + standardTexture;
             MeshKey paintingKey = new MeshKey(paintingGeometry, standardTexture,
                     left ? HumanoidMeshConverter.LEFT_ITEM : HumanoidMeshConverter.RIGHT_ITEM, kind);
-            MeshHandle painting = handle(paintingKey, paintingGeometry, standardTexture, 0xFFFFFFFF,
+            long animationFrame = (entity.level().getGameTime() << 32)
+                    ^ Integer.toUnsignedLong(Float.floatToIntBits(Minecraft.getInstance().getFrameTime()));
+            MeshHandle painting = animatedHandle(paintingKey, paintingGeometry, standardTexture,
+                    animationFrame,
                     () -> ItemMeshConverter.convertBetsyRossPainting(entity, stack, left,
                             left ? bodyModel.leftArm : bodyModel.rightArm, standardTexture));
             if (painting == null) {
@@ -264,6 +271,26 @@ public final class MeshCache implements AutoCloseable {
                 || key.kind() == MeshKey.Kind.HORSE_BODY
                 || key.kind() == MeshKey.Kind.IMPOSTOR;
         return new MeshHandle(key, mesh, texture, tint, cull);
+    }
+
+    private MeshHandle animatedHandle(MeshKey key, String geometry, ResourceLocation texture,
+                                      long animationFrame, MeshFactory factory) {
+        GpuMesh mesh = meshes.get(geometry);
+        Long sampledFrame = animatedGeometryFrames.get(geometry);
+        if (mesh == null) {
+            MeshData data = factory.create();
+            if (data.isEmpty()) return null;
+            mesh = new GpuMesh(data);
+            meshes.put(geometry, mesh);
+            animatedGeometryFrames.put(geometry, animationFrame);
+        } else if (sampledFrame == null || sampledFrame.longValue() != animationFrame) {
+            MeshData data = factory.create();
+            if (data.isEmpty()) return null;
+            mesh.updateGeometry(data);
+            animatedGeometryFrames.put(geometry, animationFrame);
+        }
+        boolean cull = key.kind() == MeshKey.Kind.MAIN_HAND || key.kind() == MeshKey.Kind.OFF_HAND;
+        return new MeshHandle(key, mesh, texture, 0xFFFFFFFF, cull);
     }
 
     private void decorations(ItemStack stack, EpicKnightsCompat.Layer epicLayer,
